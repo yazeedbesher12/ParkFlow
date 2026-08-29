@@ -39,3 +39,13 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# secrets — the Google Maps key is read from the environment, never committed
+.env
+.env.*
+!.env.example
+
+# local debug captures
+device-*.png
+pf-*.png
+*.uiautomator.xml

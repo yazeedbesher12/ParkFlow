@@ -1,0 +1,193 @@
+import { View } from 'react-native';
+import { Navigation, Clock, Timer, Building2, CircleParking } from 'lucide-react-native';
+
+import { AppButton, AppText, BottomSheet, Divider, StatusBadge } from '@/components/ui';
+import { availabilityTone } from '@/components/map/ZoneMarker';
+import { useTheme } from '@/theme/ThemeProvider';
+import { spacing } from '@/theme/spacing';
+import { radius } from '@/theme/radius';
+import { useLocale } from '@/hooks/useLocale';
+import type { ParkingZone } from '@/types';
+import { formatRate } from '@/utils/money';
+import { formatClockRange, formatDurationShort } from '@/utils/time';
+import { formatDistance } from '@/utils/geo';
+
+export interface ZoneSheetProps {
+  zone?: ParkingZone;
+  visible: boolean;
+  onClose: () => void;
+  /** Metres from the user, when a location fix is available. */
+  distanceMeters?: number;
+  onNavigate: (zone: ParkingZone) => void;
+  onStartParking: (zone: ParkingZone) => void;
+  /** Disables the CTA when the zone cannot be parked in right now. */
+  startDisabled?: boolean;
+}
+
+/** Compact fact tile used inside the sheet — three across, no wall of text. */
+function Fact({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
+  const { colors } = useTheme();
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        gap: 6,
+        padding: spacing.md,
+        borderRadius: radius.md,
+        backgroundColor: colors.surfaceAlt,
+      }}
+    >
+      {icon}
+      <AppText variant="caption" color="textTertiary" numberOfLines={1}>
+        {label}
+      </AppText>
+      <AppText variant="title" numberOfLines={1} numeric>
+        {value}
+      </AppText>
+    </View>
+  );
+}
+
+export function ZoneSheet({
+  zone,
+  visible,
+  onClose,
+  distanceMeters,
+  onNavigate,
+  onStartParking,
+  startDisabled = false,
+}: ZoneSheetProps) {
+  const { colors } = useTheme();
+  const { t, row, dateLocale, locale } = useLocale();
+
+  if (!zone) {
+    return <BottomSheet visible={false} onClose={onClose}>{null}</BottomSheet>;
+  }
+
+  const today = zone.operatingHours.find((h) => h.weekday === new Date().getDay());
+  const isClosedToday = today?.closed ?? false;
+  const isGarage = zone.kind === 'garage' || zone.kind === 'private';
+  const name = locale === 'ar' ? zone.nameAr : zone.name;
+  const city = locale === 'ar' ? zone.cityAr : zone.city;
+
+  const availabilityLabel = t(`zone.${zone.availability}` as const);
+
+  return (
+    <BottomSheet visible={visible} onClose={onClose} testID="zone-sheet">
+      <View style={{ gap: spacing.lg }}>
+        <View style={{ flexDirection: row, alignItems: 'flex-start', gap: spacing.md }}>
+          <View
+            style={{
+              width: 46,
+              height: 46,
+              borderRadius: radius.md,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: isGarage ? colors.infoSoft : colors.brandSoft,
+            }}
+          >
+            {isGarage ? (
+              <Building2 size={22} color={colors.info} strokeWidth={2.2} />
+            ) : (
+              <CircleParking size={22} color={colors.brand} strokeWidth={2.2} />
+            )}
+          </View>
+
+          <View style={{ flex: 1, gap: 4 }}>
+            <AppText variant="h2" numberOfLines={2}>
+              {name}
+            </AppText>
+            <AppText variant="bodySm" color="textSecondary">
+              {t(`zone.kind.${zone.kind}` as const)} · {zone.code} · {city}
+            </AppText>
+          </View>
+        </View>
+
+        <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
+          <StatusBadge label={availabilityLabel} tone={availabilityTone(zone.availability)} />
+          {isClosedToday ? (
+            <StatusBadge label={t('zone.freeNow')} tone="info" showDot={false} />
+          ) : (
+            <StatusBadge label={t('zone.openNow')} tone="neutral" showDot={false} />
+          )}
+          {distanceMeters != null ? (
+            <AppText variant="bodySm" color="textTertiary">
+              {formatDistance(distanceMeters)} {t('common.away')}
+            </AppText>
+          ) : null}
+        </View>
+
+        {/* Two tiles, not three: an hours range never fits a third of the width
+            and was being truncated, so it gets its own full-width row below. */}
+        <View style={{ gap: spacing.sm }}>
+          <View style={{ flexDirection: row, gap: spacing.sm }}>
+            <Fact
+              icon={<CircleParking size={16} color={colors.textTertiary} strokeWidth={2.2} />}
+              label={t('zone.rate')}
+              value={`${formatRate(zone.tariff.hourlyRate)}${t('common.perHour')}`}
+            />
+            <Fact
+              icon={<Timer size={16} color={colors.textTertiary} strokeWidth={2.2} />}
+              label={t('zone.maxStay')}
+              value={
+                zone.tariff.maxStayMinutes
+                  ? formatDurationShort(zone.tariff.maxStayMinutes * 60)
+                  : '—'
+              }
+            />
+          </View>
+
+          <View
+            style={{
+              flexDirection: row,
+              alignItems: 'center',
+              gap: spacing.md,
+              paddingVertical: spacing.md,
+              paddingHorizontal: spacing.lg,
+              borderRadius: radius.md,
+              backgroundColor: colors.surfaceAlt,
+            }}
+          >
+            <Clock size={16} color={colors.textTertiary} strokeWidth={2.2} />
+            <AppText variant="caption" color="textTertiary" style={{ flex: 1 }}>
+              {t('zone.operatingHours')}
+            </AppText>
+            <AppText variant="title" numeric>
+              {today && !today.closed
+                ? formatClockRange(today.opensAt, today.closesAt, dateLocale)
+                : t('zone.freeNow')}
+            </AppText>
+          </View>
+        </View>
+
+        <Divider />
+
+        <View style={{ flexDirection: row, gap: spacing.md }}>
+          <AppButton
+            label={t('zone.navigate')}
+            variant="secondary"
+            onPress={() => onNavigate(zone)}
+            icon={<Navigation size={18} color={colors.text} strokeWidth={2.2} />}
+            style={{ flex: 1 }}
+          />
+          <AppButton
+            label={t('zone.startParking')}
+            onPress={() => onStartParking(zone)}
+            disabled={startDisabled || zone.availability === 'full'}
+            style={{ flex: 1.35 }}
+            testID="zone-start-parking"
+          />
+        </View>
+      </View>
+    </BottomSheet>
+  );
+}
