@@ -19,8 +19,6 @@ import type {
   PointsEntry,
   ReportedAvailability,
   RoadFeedItem,
-  RoadPostResult,
-  RoadSource,
   RouteResult,
   Transaction,
   TransactionType,
@@ -194,12 +192,10 @@ export interface ProfileService {
   getNotificationPreferences(userId: string): Promise<NotificationPreferences>;
 }
 
-/** Checkpoint status from community posts and one-tap driver reports. */
+/** Checkpoint status from one-tap driver reports. */
 export interface RoadService {
   listCheckpoints(): Promise<CheckpointState[]>;
   feed(limit?: number): Promise<RoadFeedItem[]>;
-  /** Reads a Telegram/WhatsApp-style post; records it only if it names a checkpoint and a status. */
-  submitPost(input: { text: string; source?: Exclude<RoadSource, 'driver'> }): Promise<RoadPostResult>;
   report(input: {
     userId: string;
     checkpointId: string;

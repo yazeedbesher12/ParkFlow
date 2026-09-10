@@ -31,14 +31,6 @@ function useRoadInvalidation() {
   };
 }
 
-export function useSubmitRoadPost() {
-  const invalidate = useRoadInvalidation();
-  return useMutation({
-    mutationFn: (text: string) => services.roads.submitPost({ text }),
-    onSuccess: invalidate,
-  });
-}
-
 export function useReportCheckpoint() {
   const userId = useUserId();
   const invalidate = useRoadInvalidation();

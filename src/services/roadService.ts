@@ -1,31 +1,22 @@
 import type { RoadService } from './types';
-import type {
-  CheckpointState,
-  CheckpointStatus,
-  RoadEvent,
-  RoadFeedItem,
-  RoadSource,
-  ZoneReport,
-} from '@/types';
+import type { CheckpointState, CheckpointStatus, RoadEvent, RoadFeedItem, ZoneReport } from '@/types';
 import { AppError } from '@/utils/errors';
 import { createId } from '@/utils/id';
 import { networkDelay } from '@/utils/async';
 import { nowIso } from '@/utils/time';
-import { matchCheckpoint, parseRoadStatus } from '@/utils/roadParser';
 import { ZONES } from './mock/catalog';
-import { CHECKPOINTS, SEED_POSTS } from './mock/roads';
+import { CHECKPOINTS, SEED_REPORTS } from './mock/roads';
 import { getDb, mutate, type MockDatabase } from './mock/db';
 import { awardReportPoints } from './mock/points';
 import { needsZoneSeed, seedZoneReports } from './mock/community';
 
 /**
- * Road intelligence, ported from Wusool. A checkpoint's status is whichever
- * status has the most evidence, where each report counts by source credibility
- * times freshness decay exp(-ageMinutes / 90). No recent report means "open",
- * flagged as assumed rather than claimed.
+ * Checkpoint status from one-tap driver reports, ported from Wusool's road
+ * intelligence. A checkpoint's status is whichever status has the most
+ * evidence, where each report counts by freshness decay exp(-ageMinutes / 90).
+ * No recent report means "open", flagged as assumed rather than claimed.
  */
 
-const SOURCE_WEIGHT: Record<RoadSource, number> = { driver: 0.5, telegram: 0.35, whatsapp: 0.3 };
 const HALF_LIFE_MIN = 90;
 const WINDOW_MS = 6 * 60 * 60_000;
 
@@ -35,20 +26,15 @@ function recentEvents(db: MockDatabase, now: number): RoadEvent[] {
   return db.roadEvents.filter((e) => now - new Date(e.reportedAt).getTime() < WINDOW_MS);
 }
 
-/** The feed is re-seeded whenever it has gone quiet, so the demo never shows a dead network. */
+/** Reports are re-seeded whenever they have gone quiet, so the demo never shows a dead network. */
 function seedRoadEvents(db: MockDatabase): void {
   const now = Date.now();
-  for (const post of SEED_POSTS) {
-    const checkpoint = matchCheckpoint(post.text, CHECKPOINTS);
-    const status = parseRoadStatus(post.text);
-    if (!checkpoint || !status) continue;
+  for (const seed of SEED_REPORTS) {
     db.roadEvents.push({
       id: createId('rev'),
-      checkpointId: checkpoint.id,
-      status,
-      source: post.source,
-      rawText: post.text,
-      reportedAt: new Date(now - post.minutesAgo * 60_000).toISOString(),
+      checkpointId: seed.checkpointId,
+      status: seed.status,
+      reportedAt: new Date(now - seed.minutesAgo * 60_000).toISOString(),
     });
   }
 }
@@ -63,8 +49,7 @@ export function computeCheckpointStates(db: MockDatabase): CheckpointState[] {
 
     const score: Record<CheckpointStatus, number> = { open: 0, congested: 0, closed: 0 };
     for (const event of mine) {
-      score[event.status] +=
-        SOURCE_WEIGHT[event.source] * Math.exp(-ageMinutes(event.reportedAt, now) / HALF_LIFE_MIN);
+      score[event.status] += Math.exp(-ageMinutes(event.reportedAt, now) / HALF_LIFE_MIN);
     }
     const statuses = Object.keys(score) as CheckpointStatus[];
     const status = statuses.sort((a, b) => score[b] - score[a])[0]!;
@@ -80,7 +65,7 @@ export function computeCheckpointStates(db: MockDatabase): CheckpointState[] {
   });
 }
 
-/** Current checkpoint states, seeding the feed first if it has gone quiet. */
+/** Current checkpoint states, seeding the reports first if they have gone quiet. */
 export async function loadCheckpointStates(): Promise<CheckpointState[]> {
   const db = await getDb();
   if (!recentEvents(db, Date.now()).length) await mutate(seedRoadEvents);
@@ -112,26 +97,6 @@ export const mockRoadService: RoadService = {
       .map(toFeedItem);
   },
 
-  async submitPost({ text, source = 'telegram' }) {
-    await networkDelay();
-    const checkpoint = matchCheckpoint(text, CHECKPOINTS);
-    const status = parseRoadStatus(text);
-    if (!checkpoint || !status) return { checkpoint, status };
-
-    return mutate((db) => {
-      const event: RoadEvent = {
-        id: createId('rev'),
-        checkpointId: checkpoint.id,
-        status,
-        source,
-        rawText: text.trim(),
-        reportedAt: nowIso(),
-      };
-      db.roadEvents.push(event);
-      return { event: toFeedItem(event), checkpoint, status };
-    });
-  },
-
   async report({ userId, checkpointId, status }) {
     await networkDelay();
     if (!CHECKPOINTS.some((c) => c.id === checkpointId)) {
@@ -143,7 +108,6 @@ export const mockRoadService: RoadService = {
         id: createId('rev'),
         checkpointId,
         status,
-        source: 'driver',
         userId,
         reportedAt: nowIso(),
       };

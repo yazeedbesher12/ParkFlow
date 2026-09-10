@@ -9,28 +9,19 @@ import {
   Divider,
   EmptyState,
   ErrorState,
-  InlineNotice,
   PressableScale,
   Screen,
   SectionHeader,
   Skeleton,
   StatusBadge,
-  TextField,
 } from '@/components/ui';
 import { CheckpointIcon, checkpointColor } from '@/components/map/CheckpointMarker';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
-import {
-  useCheckpoints,
-  useReportCheckpoint,
-  useRoadFeed,
-  useSubmitRoadPost,
-} from '@/hooks/useCommunity';
-import { SAMPLE_ROAD_POSTS } from '@/services';
+import { useCheckpoints, useReportCheckpoint, useRoadFeed } from '@/hooks/useCommunity';
 import type { CheckpointState, CheckpointStatus } from '@/types';
-import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
 
 const STATUSES: CheckpointStatus[] = ['open', 'congested', 'closed'];
@@ -40,23 +31,16 @@ const SEVERITY: Record<CheckpointStatus, number> = { closed: 0, congested: 1, op
 const minutesSince = (iso: string) =>
   Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000));
 
-/**
- * Road alerts — Wusool's road intelligence inside ParkFlow: live checkpoint
- * status, one-tap driver reports, and a reader for the Telegram/WhatsApp posts
- * drivers already share.
- */
+/** Road alerts — live checkpoint status from one-tap driver reports. */
 export default function RoadAlertsScreen() {
   const { colors } = useTheme();
   const { t, row, locale } = useLocale();
   const { data: checkpoints, isPending, isError, error, refetch } = useCheckpoints();
   const { data: feed = [] } = useRoadFeed();
   const report = useReportCheckpoint();
-  const submit = useSubmitRoadPost();
 
   const [expanded, setExpanded] = useState<string | undefined>();
   const [thanks, setThanks] = useState<{ checkpointId: string; points: number } | undefined>();
-  const [post, setPost] = useState('');
-  const [sample, setSample] = useState(0);
 
   const nameOf = (c: { nameAr: string; nameEn: string }) => (locale === 'ar' ? c.nameAr : c.nameEn);
   const ago = (minutes: number) => (minutes < 1 ? t('roads.justNow') : t('roads.minutesAgo', { minutes }));
@@ -79,21 +63,8 @@ export default function RoadAlertsScreen() {
     );
   };
 
-  const readPost = () => {
-    if (!post.trim()) return;
-    submit.mutate(post, {
-      onSuccess: (result) => (result.event ? haptics.success() : haptics.warning()),
-    });
-  };
-
-  const trySample = () => {
-    setPost(SAMPLE_ROAD_POSTS[sample % SAMPLE_ROAD_POSTS.length]!);
-    setSample((n) => n + 1);
-    submit.reset();
-  };
-
   return (
-    <Screen keyboardAvoiding bottomInset={spacing.lg}>
+    <Screen bottomInset={spacing.lg}>
       <AppHeader title={t('roads.title')} subtitle={t('roads.subtitle')} />
 
       <View style={{ gap: spacing.xl }}>
@@ -196,68 +167,7 @@ export default function RoadAlertsScreen() {
           )}
         </View>
 
-        {/* ---- Read a community post ------------------------------------ */}
-        <View>
-          <SectionHeader title={t('roads.readPost')} subtitle={t('roads.readPostHint')} />
-          <Card padding="lg" style={{ gap: spacing.md }}>
-            <TextField
-              value={post}
-              onChangeText={(value) => {
-                setPost(value);
-                submit.reset();
-              }}
-              placeholder={t('roads.readPostPlaceholder')}
-              multiline
-              numberOfLines={3}
-              inputStyle={{ minHeight: 88, alignItems: 'flex-start', paddingVertical: spacing.md }}
-            />
-            <View style={{ flexDirection: row, gap: spacing.sm }}>
-              <AppButton
-                label={t('roads.trySample')}
-                variant="secondary"
-                size="sm"
-                style={{ flex: 1 }}
-                onPress={trySample}
-              />
-              <AppButton
-                label={t('roads.readPostAction')}
-                size="sm"
-                style={{ flex: 1 }}
-                disabled={!post.trim()}
-                loading={submit.isPending}
-                onPress={readPost}
-                testID="read-road-post"
-              />
-            </View>
-
-            {submit.data?.event && submit.data.checkpoint && submit.data.status ? (
-              <InlineNotice
-                tone="info"
-                title={t('roads.postMatched', {
-                  name: nameOf(submit.data.checkpoint),
-                  status: t(`roads.status.${submit.data.status}` as const),
-                })}
-                body={t('roads.postMatchedBody')}
-              />
-            ) : submit.data ? (
-              <InlineNotice
-                tone="warning"
-                title={t('roads.postUnmatched')}
-                body={t('roads.postUnmatchedBody')}
-              />
-            ) : null}
-
-            {submit.isError ? (
-              <InlineNotice
-                tone="danger"
-                title={t('common.somethingWrong')}
-                body={errorMessage(submit.error)}
-              />
-            ) : null}
-          </Card>
-        </View>
-
-        {/* ---- Feed ----------------------------------------------------- */}
+        {/* ---- Latest reports ------------------------------------------- */}
         <View>
           <SectionHeader title={t('roads.feed')} />
           <Card padding="lg" style={{ paddingVertical: spacing.xs }}>
@@ -267,23 +177,25 @@ export default function RoadAlertsScreen() {
               feed.map((item, index) => (
                 <View key={item.id}>
                   {index > 0 ? <Divider /> : null}
-                  <View style={{ paddingVertical: spacing.md, gap: spacing.xs }}>
-                    <AppText variant="body">{item.rawText ?? t('roads.driverReport')}</AppText>
-                    <View
-                      style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}
-                    >
-                      <StatusBadge
-                        label={t(`roads.status.${item.status}` as const)}
-                        tone={STATUS_TONE[item.status]}
-                        size="sm"
-                      />
-                      <AppText variant="caption" color="textSecondary">
-                        {locale === 'ar' ? item.checkpointNameAr : item.checkpointNameEn}
-                      </AppText>
-                      <AppText variant="caption" color="textTertiary">
-                        {t(`roads.source.${item.source}` as const)} · {ago(minutesSince(item.reportedAt))}
-                      </AppText>
-                    </View>
+                  <View
+                    style={{
+                      flexDirection: row,
+                      alignItems: 'center',
+                      gap: spacing.sm,
+                      paddingVertical: spacing.md,
+                    }}
+                  >
+                    <StatusBadge
+                      label={t(`roads.status.${item.status}` as const)}
+                      tone={STATUS_TONE[item.status]}
+                      size="sm"
+                    />
+                    <AppText variant="bodySm" numberOfLines={1} style={{ flex: 1 }}>
+                      {locale === 'ar' ? item.checkpointNameAr : item.checkpointNameEn}
+                    </AppText>
+                    <AppText variant="caption" color="textTertiary">
+                      {ago(minutesSince(item.reportedAt))}
+                    </AppText>
                   </View>
                 </View>
               ))

@@ -33,5 +33,4 @@ export const services: Services = {
 export * from './types';
 export { DEFAULT_REGION, ZONES, FACILITIES } from './mock/catalog';
 export { LANDMARKS } from './mock/landmarks';
-export { SAMPLE_ROAD_POSTS } from './mock/roads';
 export { resetDb } from './mock/db';

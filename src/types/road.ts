@@ -1,19 +1,14 @@
 import type { GeoPoint, ID, ISODateString } from './common';
 import type { AvailabilityLevel } from './parking';
 
-/** Community-reported state of a checkpoint. "open" is also the assumed default. */
+/** Driver-reported state of a checkpoint. "open" is also the assumed default. */
 export type CheckpointStatus = 'open' | 'congested' | 'closed';
-
-/** Where a road report came from — weighted by credibility when statuses are computed. */
-export type RoadSource = 'telegram' | 'whatsapp' | 'driver';
 
 export interface Checkpoint {
   id: ID;
   nameAr: string;
   nameEn: string;
   location: GeoPoint;
-  /** Spellings people actually use in posts ("الكونتينر", "Container", ...). */
-  aliases: string[];
 }
 
 export interface CheckpointState extends Checkpoint {
@@ -25,13 +20,12 @@ export interface CheckpointState extends Checkpoint {
   reportCount: number;
 }
 
+/** A driver's one-tap report of a checkpoint's status. */
 export interface RoadEvent {
   id: ID;
   checkpointId: ID;
   status: CheckpointStatus;
-  source: RoadSource;
-  /** The original post for telegram/whatsapp; absent for one-tap driver reports. */
-  rawText?: string;
+  /** Absent for the demo's seeded "other drivers" reports. */
   userId?: ID;
   reportedAt: ISODateString;
 }
@@ -39,13 +33,6 @@ export interface RoadEvent {
 export interface RoadFeedItem extends RoadEvent {
   checkpointNameAr: string;
   checkpointNameEn: string;
-}
-
-export interface RoadPostResult {
-  /** Present only when both a checkpoint and a status were read from the post. */
-  event?: RoadFeedItem;
-  checkpoint?: Checkpoint;
-  status?: CheckpointStatus;
 }
 
 export type ReportedAvailability = Exclude<AvailabilityLevel, 'unknown'>;
