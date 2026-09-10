@@ -52,6 +52,18 @@
         {
           "locationWhenInUsePermission": "ParkFlow uses your location to show nearby parking zones and confirm where you are parking."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ParkFlow uses the camera to scan the QR code on parking zone signs."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ParkFlow lets you attach photos from your library to a violation appeal."
+        }
       ]
     ],
     "experiments": {

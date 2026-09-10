@@ -38,6 +38,7 @@ export const en = {
 
   'onboarding.getStarted': 'Get Started',
   'onboarding.login': 'Log In',
+  'onboarding.demoLogin': 'Quick demo login',
   'onboarding.feature1': 'Find parking near you',
   'onboarding.feature2': 'Pay by the minute',
   'onboarding.feature3': 'Never miss an expiry',
@@ -347,6 +348,32 @@ export const en = {
   'error.network': 'No connection. Check your internet and try again.',
   'error.notFound': 'Not found',
   'error.notFoundBody': "We couldn't find what you were looking for.",
+
+  'scan.hint': 'Point your camera at the QR code on the parking sign.',
+  'scan.rowBody': 'Use your camera on the zone sign',
+  'scan.permissionTitle': 'Camera access needed',
+  'scan.permissionBody': 'Allow camera access to scan zone QR codes, or use a demo scan below.',
+  'scan.allowCamera': 'Allow camera',
+  'scan.simulate': 'Simulate a scan (demo)',
+  'scan.notRecognized': 'QR code not recognised',
+
+  'parking.receiptShareTitle': 'ParkFlow parking receipt',
+  'parking.receiptCopied': 'Receipt copied',
+
+  'appeal.removeAttachment': 'Remove photo',
+  'appeal.attachmentLimit': 'Up to {max} photos from your gallery',
+
+  'vehicle.noPermits': 'No permits on this vehicle',
+  'permit.type.resident': 'Resident permit',
+  'permit.type.disabled': 'Disabled parking permit',
+  'permit.type.business': 'Business permit',
+  'permit.type.staff': 'Staff permit',
+  'permit.status.active': 'Active',
+  'permit.status.expired': 'Expired',
+  'permit.status.revoked': 'Revoked',
+  'permit.status.pending': 'Pending',
+  'permit.validUntil': 'Valid until {date}',
+  'permit.expiredOn': 'Expired {date}',
 } as const;
 
 export type TranslationKey = keyof typeof en;

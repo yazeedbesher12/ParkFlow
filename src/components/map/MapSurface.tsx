@@ -1,6 +1,7 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import { Pressable, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Line, Rect } from 'react-native-svg';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { ZoneMarker } from './ZoneMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -9,116 +10,186 @@ import type { GeoRegion } from '@/types';
 /**
  * Default (web) implementation — react-native-maps has no browser build.
  *
- * It projects the same zone coordinates onto a stylised surface, so the browser
- * preview shows real relative positions and every interaction (tap a pin,
- * recenter, select) behaves exactly as it does on device.
+ * A Leaflet map with Esri satellite imagery (the same base the Wusool project
+ * uses), plus road and place-name overlays so streets stay readable. No API key.
+ * Zone pins are the shared `ZoneMarker` components drawn over the map and
+ * re-projected on every move, so they look identical to the native pins.
  *
- * Metro picks `MapSurface.native.tsx` on iOS/Android, which renders the real
- * map. This file is also what TypeScript resolves, so both share one contract.
+ * Metro picks `MapSurface.native.tsx` on iOS/Android. This file is also what
+ * TypeScript resolves, so both share one contract.
  */
+
+const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+const SATELLITE = `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`;
+const ROADS = `${ESRI}/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}`;
+const PLACES = `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`;
+
+function toBounds(region: GeoRegion): L.LatLngBoundsExpression {
+  return [
+    [region.latitude - region.latitudeDelta / 2, region.longitude - region.longitudeDelta / 2],
+    [region.latitude + region.latitudeDelta / 2, region.longitude + region.longitudeDelta / 2],
+  ];
+}
+
+function regionOf(map: L.Map): GeoRegion {
+  const bounds = map.getBounds();
+  const center = bounds.getCenter();
+  return {
+    latitude: center.lat,
+    longitude: center.lng,
+    latitudeDelta: bounds.getNorth() - bounds.getSouth(),
+    longitudeDelta: bounds.getEast() - bounds.getWest(),
+  };
+}
+
+function sameRegion(a: GeoRegion, b?: GeoRegion): boolean {
+  if (!b) return false;
+  const close = (x: number, y: number) => Math.abs(x - y) < 1e-7;
+  return (
+    close(a.latitude, b.latitude) &&
+    close(a.longitude, b.longitude) &&
+    close(a.latitudeDelta, b.latitudeDelta) &&
+    close(a.longitudeDelta, b.longitudeDelta)
+  );
+}
+
 export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function MapSurface(
-  { region, zones, selectedZoneId, onSelectZone, onPressBackground, userLocation, style },
+  {
+    region,
+    zones,
+    selectedZoneId,
+    onSelectZone,
+    onPressBackground,
+    userLocation,
+    onRegionChangeComplete,
+    style,
+  },
   ref,
 ) {
   const { colors } = useTheme();
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  const [viewRegion, setViewRegion] = useState<GeoRegion>(region);
+  const hostRef = useRef<View>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  // The last region we reported upward. The screen feeds it straight back in
+  // as `region`, and re-fitting to our own echo would nudge the map in a loop.
+  const emitted = useRef<GeoRegion | undefined>(undefined);
+  // Bumped on every pan/zoom frame so the pin overlay re-projects.
+  const [, setFrame] = useState(0);
+
+  // Listeners are bound once; read the latest callbacks through a ref.
+  const handlers = useRef({ onPressBackground, onRegionChangeComplete });
+  handlers.current = { onPressBackground, onRegionChangeComplete };
+
+  useEffect(() => {
+    // On web a View ref is the underlying DOM element.
+    const host = hostRef.current as unknown as HTMLElement | null;
+    if (!host) return;
+
+    // Zoom animation is off so the pin overlay moves in lockstep with the tiles.
+    const map = L.map(host, { zoomControl: false, zoomAnimation: false, zoomSnap: 0.25 });
+    map.attributionControl.setPrefix(false);
+    L.tileLayer(SATELLITE, { maxZoom: 19, attribution: 'Imagery © Esri' }).addTo(map);
+    L.tileLayer(ROADS, { maxZoom: 19 }).addTo(map);
+    L.tileLayer(PLACES, { maxZoom: 19 }).addTo(map);
+    map.setView([region.latitude, region.longitude], 15);
+
+    const redraw = () => setFrame((n) => n + 1);
+    map.on('move zoom', redraw);
+    map.on('moveend', () => {
+      const next = regionOf(map);
+      emitted.current = next;
+      handlers.current.onRegionChangeComplete?.(next);
+      redraw();
+    });
+    map.on('click', () => handlers.current.onPressBackground?.());
+    mapRef.current = map;
+
+    // The host may get its real size after mount; fit the region once it has one.
+    let fitted = false;
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize();
+      if (!fitted && host.clientWidth > 0 && host.clientHeight > 0) {
+        fitted = true;
+        map.fitBounds(toBounds(region));
+      }
+      redraw();
+    });
+    observer.observe(host);
+
+    return () => {
+      observer.disconnect();
+      map.remove();
+      mapRef.current = null;
+    };
+    // Mount once — later regions are applied by the effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Follow regions the screen asks for (first GPS fix, search result).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || sameRegion(region, emitted.current)) return;
+    map.fitBounds(toBounds(region));
+  }, [region]);
 
   useImperativeHandle(ref, () => ({
-    animateToRegion: (next) => setViewRegion(next),
+    animateToRegion: (next, durationMs = 600) =>
+      mapRef.current?.flyToBounds(toBounds(next), { duration: durationMs / 1000 }),
   }));
 
-  // Follow the region the screen asks for (first GPS fix, search result).
-  useEffect(() => setViewRegion(region), [region]);
-
-  const onLayout = (event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    setSize({ width, height });
-  };
-
-  /** Equirectangular projection — accurate enough across a few city blocks. */
-  const project = (latitude: number, longitude: number) => {
-    const left = viewRegion.longitude - viewRegion.longitudeDelta / 2;
-    const top = viewRegion.latitude + viewRegion.latitudeDelta / 2;
-    return {
-      x: ((longitude - left) / viewRegion.longitudeDelta) * size.width,
-      y: ((top - latitude) / viewRegion.latitudeDelta) * size.height,
-    };
-  };
-
-  const ready = size.width > 0 && size.height > 0;
+  const map = mapRef.current;
+  const project = (latitude: number, longitude: number) =>
+    map!.latLngToContainerPoint([latitude, longitude]);
+  const size = map?.getSize();
+  const userPoint = map && userLocation ? project(userLocation.latitude, userLocation.longitude) : null;
 
   return (
-    <View style={[{ backgroundColor: colors.mapLand, overflow: 'hidden' }, style]} onLayout={onLayout}>
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        onPress={onPressBackground}
-        accessibilityLabel="Map"
-      >
-        {ready ? (
-          <Svg width={size.width} height={size.height}>
-            <Rect x={0} y={0} width={size.width} height={size.height} fill={colors.mapLand} />
+    <View style={[{ backgroundColor: colors.mapLand, overflow: 'hidden' }, style]}>
+      <View ref={hostRef} style={[StyleSheet.absoluteFill, { zIndex: 0 }]} />
 
-            {/* Abstract street grid — decoration only, never read as data. */}
-            {Array.from({ length: 9 }).map((_, index) => {
-              const y = (size.height / 8) * index;
-              return (
-                <Line
-                  key={`h${index}`}
-                  x1={0}
-                  y1={y}
-                  x2={size.width}
-                  y2={y}
-                  stroke={colors.surface}
-                  strokeWidth={index % 3 === 0 ? 9 : 4}
-                  opacity={index % 3 === 0 ? 0.95 : 0.6}
-                />
-              );
-            })}
-            {Array.from({ length: 7 }).map((_, index) => {
-              const x = (size.width / 6) * index;
-              return (
-                <Line
-                  key={`v${index}`}
-                  x1={x}
-                  y1={0}
-                  x2={x}
-                  y2={size.height}
-                  stroke={colors.surface}
-                  strokeWidth={index % 2 === 0 ? 8 : 4}
-                  opacity={index % 2 === 0 ? 0.95 : 0.55}
-                />
-              );
-            })}
+      {map && size ? (
+        <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 1 }]}>
+          {userPoint ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: userPoint.x - 26,
+                top: userPoint.y - 26,
+                width: 52,
+                height: 52,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  borderRadius: 26,
+                  backgroundColor: colors.info,
+                  opacity: 0.18,
+                }}
+              />
+              <View
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 8,
+                  backgroundColor: colors.info,
+                  borderWidth: 3,
+                  borderColor: colors.surface,
+                }}
+              />
+            </View>
+          ) : null}
 
-            {userLocation ? (
-              <>
-                <Circle
-                  cx={project(userLocation.latitude, userLocation.longitude).x}
-                  cy={project(userLocation.latitude, userLocation.longitude).y}
-                  r={26}
-                  fill={colors.info}
-                  opacity={0.16}
-                />
-                <Circle
-                  cx={project(userLocation.latitude, userLocation.longitude).x}
-                  cy={project(userLocation.latitude, userLocation.longitude).y}
-                  r={7}
-                  fill={colors.info}
-                  stroke={colors.surface}
-                  strokeWidth={3}
-                />
-              </>
-            ) : null}
-          </Svg>
-        ) : null}
-      </Pressable>
-
-      {ready
-        ? zones.map((zone) => {
+          {zones.map((zone) => {
             const { x, y } = project(zone.location.latitude, zone.location.longitude);
             // Skip pins that fall outside the visible surface.
-            if (x < -60 || y < -60 || x > size.width + 60 || y > size.height + 60) return null;
+            if (x < -60 || y < -60 || x > size.x + 60 || y > size.y + 60) return null;
 
             return (
               <Pressable
@@ -137,8 +208,9 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
                 <ZoneMarker zone={zone} selected={zone.id === selectedZoneId} />
               </Pressable>
             );
-          })
-        : null}
+          })}
+        </View>
+      ) : null}
     </View>
   );
 });

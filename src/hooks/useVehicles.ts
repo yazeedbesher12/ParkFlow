@@ -26,6 +26,14 @@ export function useVehicle(vehicleId?: string) {
   });
 }
 
+export function useVehiclePermits(vehicleId?: string) {
+  return useQuery({
+    queryKey: queryKeys.vehiclePermits(vehicleId ?? ''),
+    queryFn: () => services.vehicles.permits(vehicleId!),
+    enabled: Boolean(vehicleId),
+  });
+}
+
 /**
  * The vehicle the app is currently acting on. The stored preference wins, but we
  * self-heal when it points at a vehicle that has been unlinked — otherwise the

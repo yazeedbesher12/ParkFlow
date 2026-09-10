@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, Paperclip, Plus } from 'lucide-react-native';
+import { Check, Paperclip, Plus, X } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 
 import {
   AppButton,
@@ -26,7 +28,8 @@ import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
 import { useSubmitAppeal, useViolation } from '@/hooks/useViolations';
-import type { AppealReason } from '@/types';
+import type { AppealAttachment, AppealReason } from '@/types';
+import { createId } from '@/utils/id';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
 
@@ -40,6 +43,7 @@ const REASONS: AppealReason[] = [
 ];
 
 const MIN_NOTES = 10;
+const MAX_ATTACHMENTS = 3;
 
 export default function AppealScreen() {
   const router = useRouter();
@@ -53,9 +57,32 @@ export default function AppealScreen() {
   const [reason, setReason] = useState<AppealReason | undefined>();
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [attachments, setAttachments] = useState<AppealAttachment[]>([]);
 
   const notesValid = notes.trim().length >= MIN_NOTES;
   const canSubmit = Boolean(reason) && notesValid;
+  const canAttach = attachments.length < MAX_ATTACHMENTS;
+
+  const pickPhotos = async () => {
+    haptics.light();
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_ATTACHMENTS - attachments.length,
+      // Kept small: attachments live in the on-device mock database.
+      quality: 0.4,
+    });
+    if (result.canceled) return;
+
+    const picked = result.assets.map<AppealAttachment>((asset, index) => ({
+      id: createId('att'),
+      name: asset.fileName ?? `photo-${attachments.length + index + 1}.jpg`,
+      uri: asset.uri,
+      mimeType: asset.mimeType ?? 'image/jpeg',
+      sizeBytes: asset.fileSize ?? 0,
+    }));
+    setAttachments((current) => [...current, ...picked].slice(0, MAX_ATTACHMENTS));
+  };
 
   if (isError) {
     return (
@@ -106,6 +133,12 @@ export default function AppealScreen() {
               label={t('appeal.reference')}
               value={submitAppeal.data?.reference ?? violation.reference}
             />
+            {attachments.length ? (
+              <>
+                <Divider />
+                <DetailRow label={t('appeal.attachments')} value={String(attachments.length)} />
+              </>
+            ) : null}
           </Card>
 
           <AppButton
@@ -206,12 +239,57 @@ export default function AppealScreen() {
             {t('appeal.attachments')} · {t('common.optional')}
           </AppText>
 
+          {attachments.length ? (
+            <View style={{ flexDirection: row, flexWrap: 'wrap', gap: spacing.sm }}>
+              {attachments.map((file) => (
+                <View
+                  key={file.id}
+                  style={{
+                    width: 88,
+                    height: 88,
+                    borderRadius: radius.md,
+                    overflow: 'hidden',
+                    backgroundColor: colors.surfaceAlt,
+                  }}
+                >
+                  <Image
+                    source={{ uri: file.uri }}
+                    style={{ width: '100%', height: '100%' }}
+                    contentFit="cover"
+                    accessibilityLabel={file.name}
+                  />
+                  <PressableScale
+                    onPress={() =>
+                      setAttachments((current) => current.filter((a) => a.id !== file.id))
+                    }
+                    haptic="light"
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('appeal.removeAttachment')}
+                    style={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: 'rgba(0,0,0,0.55)',
+                    }}
+                  >
+                    <X size={14} color={colors.onBrand} strokeWidth={2.6} />
+                  </PressableScale>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
           <PressableScale
-            onPress={() => haptics.light()}
-            disabled
+            onPress={() => void pickPhotos()}
+            disabled={!canAttach}
             accessibilityRole="button"
             accessibilityLabel={t('appeal.addAttachment')}
-            accessibilityHint={t('common.comingSoon')}
             style={{
               flexDirection: row,
               alignItems: 'center',
@@ -221,7 +299,7 @@ export default function AppealScreen() {
               borderWidth: 2,
               borderStyle: 'dashed',
               borderColor: colors.border,
-              opacity: 0.7,
+              opacity: canAttach ? 1 : 0.5,
             }}
           >
             <View
@@ -239,7 +317,7 @@ export default function AppealScreen() {
             <View style={{ flex: 1, gap: 2 }}>
               <AppText variant="titleLg">{t('appeal.addAttachment')}</AppText>
               <AppText variant="caption" color="textTertiary">
-                {t('common.comingSoon')}
+                {t('appeal.attachmentLimit', { max: MAX_ATTACHMENTS })}
               </AppText>
             </View>
             <Plus size={18} color={colors.textTertiary} strokeWidth={2.2} />
@@ -264,7 +342,7 @@ export default function AppealScreen() {
                 violationId: violation.id,
                 reason: reason!,
                 notes,
-                attachments: [],
+                attachments,
               },
               {
                 onSuccess: () => {

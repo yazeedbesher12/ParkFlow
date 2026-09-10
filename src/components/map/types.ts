@@ -3,8 +3,8 @@ import type { GeoPoint, GeoRegion, ParkingZone } from '@/types';
 
 /**
  * Platform-agnostic map contract. The native implementation renders
- * react-native-maps; the web implementation renders a projected surface so the
- * app is fully previewable in a browser. Screens only ever see this interface.
+ * react-native-maps; the web implementation renders Leaflet with satellite tiles
+ * so the app is fully previewable in a browser. Screens only ever see this interface.
  */
 export interface MapSurfaceProps {
   region: GeoRegion;

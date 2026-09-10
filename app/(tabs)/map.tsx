@@ -253,7 +253,7 @@ export default function MapScreen() {
           icon={<QrCode size={20} color={colors.text} strokeWidth={2.2} />}
           onPress={() => {
             haptics.light();
-            setCodeSheetOpen(true);
+            router.push('/scan');
           }}
           accessibilityLabel={t('map.scanQr')}
         />
@@ -358,6 +358,10 @@ export default function MapScreen() {
         onResolved={(zone) => {
           setCodeSheetOpen(false);
           openZone(zone);
+        }}
+        onScanQr={() => {
+          setCodeSheetOpen(false);
+          router.push('/scan');
         }}
       />
     </View>

@@ -6,7 +6,7 @@ import { networkDelay } from '@/utils/async';
 import { normalizePlate, formatPlate, isValidPlate } from '@/utils/plate';
 import { nowIso } from '@/utils/time';
 import { getDb, mutate } from './mock/db';
-import { seedVehicleHistory } from './mock/demo';
+import { seedVehicleHistory, seedVehiclePermits } from './mock/demo';
 
 /** Fallback display name when the user gave no make/model. */
 function displayNameFor(vehicle: Vehicle, link: UserVehicle): string {
@@ -179,7 +179,10 @@ export const mockVehicleService: VehicleService = {
 
   async permits(vehicleId) {
     await networkDelay(120, 260);
-    const db = await getDb();
-    return db.permits.filter((p) => p.vehicleId === vehicleId);
+    // Demo permits are issued on first view, so every linked vehicle has some.
+    return mutate((db) => {
+      seedVehiclePermits(db, vehicleId);
+      return db.permits.filter((p) => p.vehicleId === vehicleId);
+    });
   },
 };

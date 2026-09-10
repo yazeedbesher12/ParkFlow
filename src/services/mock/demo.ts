@@ -1,6 +1,7 @@
 import type {
   AppNotification,
   ParkingSession,
+  Permit,
   Transaction,
   Vehicle,
   Violation,
@@ -39,6 +40,47 @@ function zone(id: string) {
   const found = ZONES.find((z) => z.id === id);
   if (!found) throw new Error(`Unknown demo zone ${id}`);
   return found;
+}
+
+/**
+ * Pretend permits for one vehicle — a live resident permit and a lapsed staff
+ * one, so the vehicle screen shows both states. Runs for every linked vehicle,
+ * not just the first. Idempotent per vehicle.
+ */
+export function seedVehiclePermits(db: MockDatabase, vehicleId: string): void {
+  if (db.permits.some((p) => p.vehicleId === vehicleId)) return;
+  const vehicle = db.vehicles.find((v) => v.id === vehicleId);
+  const link = db.userVehicles.find((l) => l.vehicleId === vehicleId && !l.unlinkedAt);
+  if (!vehicle || !link) return;
+
+  // Plate digits make each reference look issued to this car specifically.
+  const serial = vehicle.plateNumber.replace(/\D/g, '').slice(-4).padStart(4, '0');
+
+  const permits: Permit[] = [
+    {
+      id: createId('pmt'),
+      vehicleId,
+      userId: link.userId,
+      type: 'resident',
+      reference: `RES-2026-${serial}`,
+      zoneIds: [zone('zone_masyoun').id, zone('zone_tireh').id],
+      validFrom: dayAt(64, 8, 0),
+      validTo: dayAt(-301, 23, 59),
+      status: 'active',
+    },
+    {
+      id: createId('pmt'),
+      vehicleId,
+      userId: link.userId,
+      type: 'staff',
+      reference: `STF-2025-${serial}`,
+      zoneIds: [zone('zone_hospital').id],
+      validFrom: dayAt(420, 8, 0),
+      validTo: dayAt(55, 23, 59),
+      status: 'expired',
+    },
+  ];
+  db.permits.push(...permits);
 }
 
 /**

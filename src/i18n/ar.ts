@@ -40,6 +40,33 @@ export const ar: Partial<Translations> = {
 
   'onboarding.getStarted': 'ابدأ الآن',
   'onboarding.login': 'تسجيل الدخول',
+  'onboarding.demoLogin': 'دخول تجريبي سريع',
+
+  'scan.hint': 'وجّه الكاميرا نحو رمز QR على لافتة الموقف.',
+  'scan.rowBody': 'استخدم الكاميرا على لافتة المنطقة',
+  'scan.permissionTitle': 'نحتاج إذن الكاميرا',
+  'scan.permissionBody': 'اسمح بالوصول إلى الكاميرا لمسح رموز المناطق، أو استخدم المسح التجريبي بالأسفل.',
+  'scan.allowCamera': 'السماح بالكاميرا',
+  'scan.simulate': 'مسح تجريبي',
+  'scan.notRecognized': 'لم يتم التعرف على الرمز',
+
+  'parking.receiptShareTitle': 'إيصال وقوف ParkFlow',
+  'parking.receiptCopied': 'تم نسخ الإيصال',
+
+  'appeal.removeAttachment': 'إزالة الصورة',
+  'appeal.attachmentLimit': 'حتى {max} صور من المعرض',
+
+  'vehicle.noPermits': 'لا توجد تصاريح لهذه المركبة',
+  'permit.type.resident': 'تصريح سكان',
+  'permit.type.disabled': 'تصريح ذوي الإعاقة',
+  'permit.type.business': 'تصريح تجاري',
+  'permit.type.staff': 'تصريح موظفين',
+  'permit.status.active': 'ساري',
+  'permit.status.expired': 'منتهي',
+  'permit.status.revoked': 'ملغى',
+  'permit.status.pending': 'قيد المراجعة',
+  'permit.validUntil': 'ساري حتى {date}',
+  'permit.expiredOn': 'انتهى في {date}',
   'onboarding.feature1': 'اعثر على موقف قريب منك',
   'onboarding.feature2': 'ادفع حسب الدقائق',
   'onboarding.feature3': 'لا تفوّت انتهاء الوقت',

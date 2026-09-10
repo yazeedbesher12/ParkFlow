@@ -27,8 +27,13 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
-import { useSetDefaultVehicle, useUnlinkVehicle, useVehicle } from '@/hooks/useVehicles';
-import { useActiveSessions, useSessionHistory } from '@/hooks/useParking';
+import {
+  useSetDefaultVehicle,
+  useUnlinkVehicle,
+  useVehicle,
+  useVehiclePermits,
+} from '@/hooks/useVehicles';
+import { useActiveSessions, useSessionHistory, useZones } from '@/hooks/useParking';
 import { useViolations } from '@/hooks/useViolations';
 import type { VehicleType } from '@/types';
 import { formatDate, formatDuration, formatTime, secondsBetween } from '@/utils/time';
@@ -52,6 +57,8 @@ export default function VehicleDetailScreen() {
   const { data: sessions = [] } = useSessionHistory(id);
   const { data: violations = [] } = useViolations(id);
   const { data: activeSessions = [] } = useActiveSessions();
+  const { data: permits = [] } = useVehiclePermits(id);
+  const { data: zones = [] } = useZones();
   const setDefault = useSetDefaultVehicle();
   const unlink = useUnlinkVehicle();
 
@@ -262,8 +269,58 @@ export default function VehicleDetailScreen() {
         {/* ---- Permits -------------------------------------------------- */}
         <View>
           <SectionHeader title={t('vehicle.permits')} />
-          <Card padding="lg">
-            <EmptyState compact title={t('common.comingSoon')} />
+          <Card padding="lg" style={{ paddingVertical: spacing.xs }}>
+            {permits.length === 0 ? (
+              <EmptyState compact title={t('vehicle.noPermits')} />
+            ) : (
+              permits.map((permit, index) => {
+                const active = permit.status === 'active';
+                const zoneNames = permit.zoneIds
+                  .map((zoneId) => {
+                    const zone = zones.find((z) => z.id === zoneId);
+                    if (!zone) return zoneId;
+                    return locale === 'ar' ? zone.nameAr : zone.name;
+                  })
+                  .join(', ');
+                const validity = t(active ? 'permit.validUntil' : 'permit.expiredOn', {
+                  date: formatDate(permit.validTo, dateLocale),
+                });
+
+                return (
+                  <View key={permit.id}>
+                    {index > 0 ? <Divider /> : null}
+                    <ListItem
+                      title={t(`permit.type.${permit.type}` as const)}
+                      subtitle={`${zoneNames} · ${validity}`}
+                      leading={
+                        <View
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: radius.md,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: colors.surfaceAlt,
+                          }}
+                        >
+                          <BadgeCheck
+                            size={18}
+                            color={active ? colors.brand : colors.textTertiary}
+                            strokeWidth={2.1}
+                          />
+                        </View>
+                      }
+                      trailing={
+                        <StatusBadge
+                          label={t(`permit.status.${permit.status}` as const)}
+                          tone={active ? 'success' : 'neutral'}
+                        />
+                      }
+                    />
+                  </View>
+                );
+              })
+            )}
           </Card>
         </View>
 

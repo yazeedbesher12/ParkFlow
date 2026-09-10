@@ -1,4 +1,5 @@
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Platform, Share, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Share2 } from 'lucide-react-native';
 
@@ -27,8 +28,11 @@ import { useSessionById, useSessionBreakdown, useSettleSession } from '@/hooks/u
 import { useVehicle } from '@/hooks/useVehicles';
 import { useTransaction } from '@/hooks/useWallet';
 import { formatDuration, formatDate, formatTime } from '@/utils/time';
-import { formatRate } from '@/utils/money';
+import { formatMoney, formatRate } from '@/utils/money';
 import { errorMessage } from '@/utils/errors';
+
+/** Browsers without a share sheet get the receipt copied to the clipboard instead. */
+type WebNavigator = { clipboard?: { writeText(text: string): Promise<void> } };
 
 export default function ReceiptScreen() {
   const router = useRouter();
@@ -41,6 +45,7 @@ export default function ReceiptScreen() {
   const { data: transaction } = useTransaction(session?.paymentTransactionId);
   const breakdown = useSessionBreakdown(session, { live: false });
   const settle = useSettleSession();
+  const [copied, setCopied] = useState(false);
 
   if (isError) {
     return (
@@ -64,6 +69,34 @@ export default function ReceiptScreen() {
 
   const paymentFailed = session.paymentStatus === 'failed';
   const total = session.finalCost ?? session.currentCost;
+
+  const shareReceipt = async () => {
+    const zoneName =
+      locale === 'ar'
+        ? session.pricingRulesSnapshot.zoneNameAr
+        : session.pricingRulesSnapshot.zoneName;
+    const message = [
+      t('parking.receiptShareTitle'),
+      `${zoneName} (${session.pricingRulesSnapshot.zoneCode})`,
+      vehicle ? `${vehicle.displayName} · ${vehicle.plateNumber}` : undefined,
+      `${formatDate(session.startedAt, dateLocale)} · ${formatTime(session.startedAt, dateLocale)} – ${
+        session.stoppedAt ? formatTime(session.stoppedAt, dateLocale) : '—'
+      }`,
+      `${t('parking.duration')}: ${formatDuration(breakdown.elapsedSeconds)}`,
+      `${t('parking.totalPaid')}: ${formatMoney(total)}`,
+      transaction ? `${t('parking.transactionId')}: ${transaction.reference}` : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      await Share.share({ message, title: t('parking.receiptShareTitle') });
+    } catch {
+      if (Platform.OS !== 'web') return;
+      const clipboard = (globalThis.navigator as unknown as WebNavigator | undefined)?.clipboard;
+      await clipboard?.writeText(message).then(() => setCopied(true), () => undefined);
+    }
+  };
 
   return (
     <Screen bottomInset={spacing.xl}>
@@ -178,12 +211,12 @@ export default function ReceiptScreen() {
           testID="receipt-done"
         />
         <AppButton
-          label={t('parking.shareReceipt')}
+          label={copied ? t('parking.receiptCopied') : t('parking.shareReceipt')}
           variant="ghost"
           size="sm"
-          disabled
-          icon={<Share2 size={16} color={colors.textTertiary} strokeWidth={2.2} />}
-          accessibilityHint={t('common.comingSoon')}
+          onPress={() => void shareReceipt()}
+          icon={<Share2 size={16} color={colors.brand} strokeWidth={2.2} />}
+          testID="receipt-share"
         />
       </Reveal>
     </Screen>

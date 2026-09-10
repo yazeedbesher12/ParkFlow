@@ -3,7 +3,14 @@ import { View } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { Hash, QrCode } from 'lucide-react-native';
 
-import { AppButton, AppText, BottomSheet, InlineNotice, TextField } from '@/components/ui';
+import {
+  AppButton,
+  AppText,
+  BottomSheet,
+  InlineNotice,
+  PressableScale,
+  TextField,
+} from '@/components/ui';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
@@ -17,14 +24,16 @@ export interface ZoneCodeSheetProps {
   visible: boolean;
   onClose: () => void;
   onResolved: (zone: ParkingZone) => void;
+  /** Opens the QR scanner; the row is hidden when not provided. */
+  onScanQr?: () => void;
 }
 
 /**
  * Manual zone entry — the fallback when GPS is wrong, indoors or unavailable.
- * QR scanning shares this entry point and resolves to the same code lookup, so
- * adding the camera later does not change any of the surrounding flow.
+ * The QR scanner resolves to the same code lookup, so both entry points feed
+ * the same start-parking flow.
  */
-export function ZoneCodeSheet({ visible, onClose, onResolved }: ZoneCodeSheetProps) {
+export function ZoneCodeSheet({ visible, onClose, onResolved, onScanQr }: ZoneCodeSheetProps) {
   const { colors } = useTheme();
   const { t } = useLocale();
   const [code, setCode] = useState('');
@@ -64,21 +73,30 @@ export function ZoneCodeSheet({ visible, onClose, onResolved }: ZoneCodeSheetPro
           returnKeyType="go"
         />
 
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.md,
-            padding: spacing.lg,
-            borderRadius: radius.lg,
-            backgroundColor: colors.surfaceAlt,
-          }}
-        >
-          <QrCode size={22} color={colors.textSecondary} strokeWidth={2.1} />
-          <AppText variant="bodySm" color="textSecondary" style={{ flex: 1 }}>
-            {t('common.comingSoon')} — {t('map.scanQr')}
-          </AppText>
-        </View>
+        {onScanQr ? (
+          <PressableScale
+            onPress={onScanQr}
+            haptic="light"
+            accessibilityRole="button"
+            accessibilityLabel={t('map.scanQr')}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.md,
+              padding: spacing.lg,
+              borderRadius: radius.lg,
+              backgroundColor: colors.surfaceAlt,
+            }}
+          >
+            <QrCode size={22} color={colors.brand} strokeWidth={2.1} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <AppText variant="title">{t('map.scanQr')}</AppText>
+              <AppText variant="caption" color="textSecondary">
+                {t('scan.rowBody')}
+              </AppText>
+            </View>
+          </PressableScale>
+        ) : null}
 
         {lookup.isError ? (
           <InlineNotice tone="warning" title={t('map.noZones')} body={t('map.noZonesBody')} />
