@@ -1,3 +1,8 @@
+import type { GeoPoint } from '@/types';
+
+const pointKey = (point?: GeoPoint) =>
+  point ? `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}` : '';
+
 /**
  * Central query-key registry. Keeping them here (rather than inline strings)
  * makes invalidation after a mutation explicit and greppable.
@@ -30,6 +35,11 @@ export const queryKeys = {
   unreadCount: (userId: string) => ['notifications', userId, 'unread'] as const,
 
   profile: (userId: string) => ['profile', userId] as const,
+
+  checkpoints: () => ['roads', 'checkpoints'] as const,
+  roadFeed: () => ['roads', 'feed'] as const,
+  route: (from?: GeoPoint, to?: GeoPoint) => ['route', pointKey(from), pointKey(to)] as const,
+  trust: (userId: string) => ['trust', userId] as const,
 } as const;
 
 /** Everything that changes when money moves. */

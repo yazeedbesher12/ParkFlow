@@ -7,6 +7,9 @@ import { mockPaymentService } from './paymentService';
 import { mockViolationService } from './violationService';
 import { mockNotificationService } from './notificationService';
 import { mockProfileService } from './profileService';
+import { mockRoadService } from './roadService';
+import { osrmRoutingService } from './routingService';
+import { mockTrustService } from './trustService';
 
 /**
  * Single composition point. Swapping the mock backend for HTTP means changing
@@ -21,8 +24,14 @@ export const services: Services = {
   violations: mockViolationService,
   notifications: mockNotificationService,
   profile: mockProfileService,
+  roads: mockRoadService,
+  // Real routing: the public OSRM server, with a straight-line fallback offline.
+  routing: osrmRoutingService,
+  trust: mockTrustService,
 };
 
 export * from './types';
 export { DEFAULT_REGION, ZONES, FACILITIES } from './mock/catalog';
+export { LANDMARKS } from './mock/landmarks';
+export { SAMPLE_ROAD_POSTS } from './mock/roads';
 export { resetDb } from './mock/db';

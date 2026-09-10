@@ -1,5 +1,24 @@
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { GeoPoint, GeoRegion, ParkingZone } from '@/types';
+import type { CheckpointStatus, GeoPoint, GeoRegion, ParkingZone } from '@/types';
+
+export interface MapCheckpoint {
+  id: string;
+  name: string;
+  location: GeoPoint;
+  status: CheckpointStatus;
+  assumed: boolean;
+}
+
+export interface MapRoute {
+  coordinates: GeoPoint[];
+  /** Alternatives that were not taken — drawn dashed. */
+  alternatives: GeoPoint[][];
+}
+
+export interface MapLandmark {
+  name: string;
+  location: GeoPoint;
+}
 
 /**
  * Platform-agnostic map contract. The native implementation renders
@@ -15,6 +34,11 @@ export interface MapSurfaceProps {
   userLocation?: GeoPoint;
   /** Fired after the user finishes moving the map. */
   onRegionChangeComplete?: (region: GeoRegion) => void;
+  checkpoints?: MapCheckpoint[];
+  onSelectCheckpoint?: (checkpointId: string) => void;
+  route?: MapRoute;
+  /** The place a landmark search resolved to. */
+  landmark?: MapLandmark;
   style?: StyleProp<ViewStyle>;
 }
 

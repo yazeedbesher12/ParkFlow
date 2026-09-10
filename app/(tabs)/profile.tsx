@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  Award,
   Bell,
   CircleHelp,
   CreditCard,
@@ -10,6 +11,7 @@ import {
   LogOut,
   ScrollText,
   Settings,
+  TriangleAlert,
   User as UserIcon,
 } from 'lucide-react-native';
 import { useState } from 'react';
@@ -30,6 +32,7 @@ import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
 import { useCurrentUser } from '@/hooks/useSession';
+import { useTrust } from '@/hooks/useCommunity';
 import { useAuthStore } from '@/store/authStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { services } from '@/services';
@@ -64,6 +67,7 @@ export default function ProfileScreen() {
   const queryClient = useQueryClient();
 
   const { user } = useCurrentUser();
+  const { data: trust } = useTrust();
   const signOut = useAuthStore((s) => s.signOut);
   const resetPreferences = usePreferencesStore((s) => s.reset);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -107,6 +111,36 @@ export default function ProfileScreen() {
               {t('profile.memberSince')} {formatDate(user.createdAt, dateLocale)}
             </AppText>
           ) : null}
+        </Card>
+
+        <Card padding="lg" style={{ paddingVertical: spacing.xs }}>
+          <ListItem
+            title={t('points.menu')}
+            subtitle={
+              trust
+                ? trust.discountPercent
+                  ? t('points.menuBody', {
+                      tier: t(`points.tier.${trust.tier}` as const),
+                      score: trust.score,
+                      percent: trust.discountPercent,
+                    })
+                  : t('points.menuBodyNoDiscount', {
+                      tier: t(`points.tier.${trust.tier}` as const),
+                      score: trust.score,
+                    })
+                : undefined
+            }
+            leading={<MenuIcon><Award {...iconProps} /></MenuIcon>}
+            showChevron
+            onPress={() => router.push('/profile/points')}
+          />
+          <Divider inset={52} />
+          <ListItem
+            title={t('profile.roadAlerts')}
+            leading={<MenuIcon><TriangleAlert {...iconProps} /></MenuIcon>}
+            showChevron
+            onPress={() => router.push('/roads')}
+          />
         </Card>
 
         <Card padding="lg" style={{ paddingVertical: spacing.xs }}>

@@ -85,9 +85,26 @@ export function estimatePrepaidCost(tariff: Tariff, minutes: number): number {
   return tariff.dailyCap != null ? Math.min(withMinimum, tariff.dailyCap) : withMinimum;
 }
 
-/** Freeze the tariff onto a session so later price changes cannot rewrite it. */
-export function snapshotTariff(tariff: Tariff, capturedAt: string): RateSnapshot {
+/** The tariff with a loyalty discount applied to every money field. */
+export function discountTariff(tariff: Tariff, percent: number): Tariff {
+  if (!percent) return tariff;
+  const cut = (minor: number) => Math.round(minor * (1 - percent / 100));
   return {
+    ...tariff,
+    hourlyRate: cut(tariff.hourlyRate),
+    minimumCharge: cut(tariff.minimumCharge),
+    dailyCap: tariff.dailyCap != null ? cut(tariff.dailyCap) : undefined,
+  };
+}
+
+/** Freeze the tariff onto a session so later price changes cannot rewrite it. */
+export function snapshotTariff(
+  tariff: Tariff,
+  capturedAt: string,
+  loyaltyDiscountPercent?: number,
+): RateSnapshot {
+  return {
+    loyaltyDiscountPercent,
     tariffId: tariff.id,
     hourlyRate: tariff.hourlyRate,
     currency: tariff.currency,

@@ -4,6 +4,8 @@ import type {
   ParkingSession,
   PaymentMethod,
   Permit,
+  PointsEntry,
+  RoadEvent,
   Transaction,
   User,
   UserVehicle,
@@ -11,6 +13,7 @@ import type {
   Violation,
   ViolationEvidence,
   Wallet,
+  ZoneReport,
 } from '@/types';
 import { appStorage, STORAGE_KEYS } from '@/services/storage';
 
@@ -31,6 +34,11 @@ export interface MockDatabase {
   evidence: ViolationEvidence[];
   appeals: Appeal[];
   permits: Permit[];
+  /** Community road posts and driver checkpoint reports (shared, not user-scoped). */
+  roadEvents: RoadEvent[];
+  /** Driver reports of zone availability (shared). */
+  zoneReports: ZoneReport[];
+  pointsLedger: PointsEntry[];
   notifications: AppNotification[];
   otp: { challengeId: string; phone: string; code: string; expiresAt: string }[];
 }
@@ -47,6 +55,9 @@ const emptyDb = (): MockDatabase => ({
   evidence: [],
   appeals: [],
   permits: [],
+  roadEvents: [],
+  zoneReports: [],
+  pointsLedger: [],
   notifications: [],
   otp: [],
 });

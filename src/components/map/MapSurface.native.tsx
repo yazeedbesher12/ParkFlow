@@ -1,7 +1,9 @@
 import { forwardRef, useImperativeHandle, useMemo, useRef } from 'react';
 import { Platform, View } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from 'react-native-maps';
 import { ZoneMarker } from './ZoneMarker';
+import { CheckpointMarker } from './CheckpointMarker';
+import { LandmarkMarker } from './LandmarkMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { mapStyleDark, mapStyleLight } from './mapStyle';
@@ -11,10 +13,23 @@ import { mapStyleDark, mapStyleLight } from './mapStyle';
  * the Google provider, which is why the style array is passed conditionally).
  */
 export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function MapSurface(
-  { region, zones, selectedZoneId, onSelectZone, onPressBackground, userLocation, onRegionChangeComplete, style },
+  {
+    region,
+    zones,
+    selectedZoneId,
+    onSelectZone,
+    onPressBackground,
+    userLocation,
+    onRegionChangeComplete,
+    checkpoints,
+    onSelectCheckpoint,
+    route,
+    landmark,
+    style,
+  },
   ref,
 ) {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
   const mapRef = useRef<MapView>(null);
 
   useImperativeHandle(ref, () => ({
@@ -45,6 +60,42 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
         onPress={onPressBackground}
         onRegionChangeComplete={(next) => onRegionChangeComplete?.(next)}
       >
+        {route ? (
+          <>
+            {route.alternatives.map((line, index) => (
+              <Polyline
+                key={`alt-${index}`}
+                coordinates={line}
+                strokeColor={colors.textTertiary}
+                strokeWidth={4}
+                lineDashPattern={[8, 8]}
+              />
+            ))}
+            <Polyline coordinates={route.coordinates} strokeColor={colors.brand} strokeWidth={5} />
+          </>
+        ) : null}
+
+        {checkpoints?.map((checkpoint) => (
+          <Marker
+            key={checkpoint.id}
+            coordinate={checkpoint.location}
+            onPress={(event) => {
+              event.stopPropagation();
+              onSelectCheckpoint?.(checkpoint.id);
+            }}
+            anchor={{ x: 0.5, y: 0.5 }}
+            accessibilityLabel={`${checkpoint.name}, ${checkpoint.status}`}
+          >
+            <CheckpointMarker status={checkpoint.status} assumed={checkpoint.assumed} label={checkpoint.name} />
+          </Marker>
+        ))}
+
+        {landmark ? (
+          <Marker coordinate={landmark.location} anchor={{ x: 0.5, y: 0.5 }}>
+            <LandmarkMarker name={landmark.name} />
+          </Marker>
+        ) : null}
+
         {zones.map((zone) => (
           <Marker
             key={zone.id}

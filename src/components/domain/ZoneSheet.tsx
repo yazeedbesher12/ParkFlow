@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Navigation, Clock, Timer, Building2, CircleParking } from 'lucide-react-native';
+import { Navigation, Clock, Timer, Building2, CircleParking, Users } from 'lucide-react-native';
 
 import { AppButton, AppText, BottomSheet, Divider, StatusBadge } from '@/components/ui';
 import { availabilityTone } from '@/components/map/ZoneMarker';
@@ -7,7 +8,8 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
-import type { ParkingZone } from '@/types';
+import { useReportZone } from '@/hooks/useCommunity';
+import type { ParkingZone, ReportedAvailability } from '@/types';
 import { formatRate } from '@/utils/money';
 import { formatClockRange, formatDurationShort } from '@/utils/time';
 import { formatDistance } from '@/utils/geo';
@@ -68,6 +70,15 @@ export function ZoneSheet({
 }: ZoneSheetProps) {
   const { colors } = useTheme();
   const { t, row, dateLocale, locale } = useLocale();
+  const reportZone = useReportZone();
+  const [thanks, setThanks] = useState<'points' | 'counted' | undefined>();
+
+  // Each zone starts with a fresh report prompt.
+  useEffect(() => {
+    setThanks(undefined);
+    reportZone.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zone?.id]);
 
   if (!zone) {
     return <BottomSheet visible={false} onClose={onClose}>{null}</BottomSheet>;
@@ -80,6 +91,12 @@ export function ZoneSheet({
   const city = locale === 'ar' ? zone.cityAr : zone.city;
 
   const availabilityLabel = t(`zone.${zone.availability}` as const);
+
+  const sendReport = (availability: ReportedAvailability) =>
+    reportZone.mutate(
+      { zoneId: zone.id, availability },
+      { onSuccess: (result) => setThanks(result.points ? 'points' : 'counted') },
+    );
 
   return (
     <BottomSheet visible={visible} onClose={onClose} testID="zone-sheet">
@@ -126,6 +143,19 @@ export function ZoneSheet({
           ) : null}
         </View>
 
+        {zone.crowd ? (
+          <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
+            <Users size={14} color={colors.textTertiary} strokeWidth={2.2} />
+            <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>
+              {t('zone.crowdLine', {
+                level: t(`zone.${zone.crowd.availability}` as const),
+                minutes: zone.crowd.minutesSinceReport,
+                count: zone.crowd.reportCount,
+              })}
+            </AppText>
+          </View>
+        ) : null}
+
         {/* Two tiles, not three: an hours range never fits a third of the width
             and was being truncated, so it gets its own full-width row below. */}
         <View style={{ gap: spacing.sm }}>
@@ -169,11 +199,39 @@ export function ZoneSheet({
           </View>
         </View>
 
+        {/* One-tap driver report — feeds the crowd availability everyone sees. */}
+        <View style={{ gap: spacing.sm }}>
+          <AppText variant="label" color="textSecondary">
+            {t('zone.reportPrompt')}
+          </AppText>
+          <View style={{ flexDirection: row, gap: spacing.sm }}>
+            {(['available', 'limited', 'full'] as const).map((level) => (
+              <AppButton
+                key={level}
+                label={t(`zone.report.${level}` as const)}
+                variant="secondary"
+                size="sm"
+                style={{ flex: 1 }}
+                loading={reportZone.isPending && reportZone.variables?.availability === level}
+                disabled={reportZone.isPending}
+                onPress={() => sendReport(level)}
+              />
+            ))}
+          </View>
+          {thanks ? (
+            <AppText variant="caption" color="successText">
+              {thanks === 'points'
+                ? t('zone.reportThanksPoints', { points: 5 })
+                : t('zone.reportThanks')}
+            </AppText>
+          ) : null}
+        </View>
+
         <Divider />
 
         <View style={{ flexDirection: row, gap: spacing.md }}>
           <AppButton
-            label={t('zone.navigate')}
+            label={t('zone.route')}
             variant="secondary"
             onPress={() => onNavigate(zone)}
             icon={<Navigation size={18} color={colors.text} strokeWidth={2.2} />}
@@ -182,7 +240,7 @@ export function ZoneSheet({
           <AppButton
             label={t('zone.startParking')}
             onPress={() => onStartParking(zone)}
-            disabled={startDisabled || zone.availability === 'full'}
+            disabled={startDisabled || (zone.crowd?.baseAvailability ?? zone.availability) === 'full'}
             style={{ flex: 1.35 }}
             testID="zone-start-parking"
           />

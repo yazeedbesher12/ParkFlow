@@ -1,4 +1,5 @@
 import type { GeoPoint, ID, ISODateString } from './common';
+import type { CrowdAvailability } from './road';
 
 export type ParkingMode = 'start_stop' | 'prepaid';
 
@@ -61,6 +62,8 @@ export interface ParkingZone {
   operatorName?: string;
   supportedEntryMethods: ParkingEntryMethod[];
   updatedAt: ISODateString;
+  /** Recent driver reports; when present, `availability` reflects them. */
+  crowd?: CrowdAvailability;
 }
 
 /** A garage / structured facility. Zones may belong to one. */
@@ -107,6 +110,8 @@ export interface RateSnapshot {
   dailyCap?: number;
   maxStayMinutes?: number;
   capturedAt: ISODateString;
+  /** Loyalty discount (percent) already applied to the money fields above. */
+  loyaltyDiscountPercent?: number;
 }
 
 export interface PricingRulesSnapshot {

@@ -4,6 +4,8 @@ import type {
   AppealReason,
   AppNotification,
   AuthSession,
+  CheckpointState,
+  CheckpointStatus,
   GeoPoint,
   NotificationPreferences,
   OtpChallenge,
@@ -14,8 +16,15 @@ import type {
   ParkingZone,
   PaymentMethod,
   Permit,
+  PointsEntry,
+  ReportedAvailability,
+  RoadFeedItem,
+  RoadPostResult,
+  RoadSource,
+  RouteResult,
   Transaction,
   TransactionType,
+  TrustSummary,
   User,
   UserVehicleView,
   Vehicle,
@@ -23,6 +32,7 @@ import type {
   Violation,
   ViolationEvidence,
   Wallet,
+  ZoneReport,
 } from '@/types';
 
 /**
@@ -184,6 +194,32 @@ export interface ProfileService {
   getNotificationPreferences(userId: string): Promise<NotificationPreferences>;
 }
 
+/** Checkpoint status from community posts and one-tap driver reports. */
+export interface RoadService {
+  listCheckpoints(): Promise<CheckpointState[]>;
+  feed(limit?: number): Promise<RoadFeedItem[]>;
+  /** Reads a Telegram/WhatsApp-style post; records it only if it names a checkpoint and a status. */
+  submitPost(input: { text: string; source?: Exclude<RoadSource, 'driver'> }): Promise<RoadPostResult>;
+  report(input: {
+    userId: string;
+    checkpointId: string;
+    status: CheckpointStatus;
+  }): Promise<{ event: RoadFeedItem; points?: PointsEntry }>;
+  reportZone(input: {
+    userId: string;
+    zoneId: string;
+    availability: ReportedAvailability;
+  }): Promise<{ report: ZoneReport; points?: PointsEntry }>;
+}
+
+export interface RoutingService {
+  getRoute(from: GeoPoint, to: GeoPoint): Promise<RouteResult>;
+}
+
+export interface TrustService {
+  get(userId: string): Promise<TrustSummary>;
+}
+
 export interface Services {
   auth: AuthService;
   vehicles: VehicleService;
@@ -193,6 +229,9 @@ export interface Services {
   violations: ViolationService;
   notifications: NotificationService;
   profile: ProfileService;
+  roads: RoadService;
+  routing: RoutingService;
+  trust: TrustService;
 }
 
 export type { Vehicle, UserVehicleView };

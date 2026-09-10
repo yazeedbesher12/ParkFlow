@@ -5,3 +5,4 @@ export * from './parking';
 export * from './wallet';
 export * from './violation';
 export * from './notification';
+export * from './road';

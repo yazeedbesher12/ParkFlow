@@ -32,8 +32,9 @@ import { useActiveSessions, useStartParking, useZone } from '@/hooks/useParking'
 import { useWallet } from '@/hooks/useWallet';
 import { useIdempotencyKey } from '@/hooks/useIdempotencyKey';
 import { useUserId } from '@/hooks/useSession';
+import { useTrust } from '@/hooks/useCommunity';
 import type { ParkingMode } from '@/types';
-import { estimatePrepaidCost, PREPAID_DURATION_OPTIONS } from '@/utils/pricing';
+import { discountTariff, estimatePrepaidCost, PREPAID_DURATION_OPTIONS } from '@/utils/pricing';
 import { formatClockRange, formatDurationShort } from '@/utils/time';
 import { formatMoney, formatRate } from '@/utils/money';
 import { errorMessage } from '@/utils/errors';
@@ -52,6 +53,7 @@ export default function StartParkingScreen() {
   const { data: activeSessions = [] } = useActiveSessions();
   const startParking = useStartParking();
   const idempotency = useIdempotencyKey('start');
+  const { data: trust } = useTrust();
 
   const [vehicleSheetOpen, setVehicleSheetOpen] = useState(false);
   const [mode, setMode] = useState<ParkingMode | undefined>();
@@ -62,14 +64,21 @@ export default function StartParkingScreen() {
   /** The one hard rule: a vehicle can only hold one live session. */
   const clashingSession = activeSessions.find((s) => s.vehicleId === selected?.id);
 
+  // The same loyalty discount the service applies at start, so what is shown is what is charged.
+  const discount = trust?.discountPercent ?? 0;
+  const tariff = useMemo(
+    () => (zone ? discountTariff(zone.tariff, discount) : undefined),
+    [zone, discount],
+  );
+
   const prepaidCost = useMemo(
-    () => (zone && effectiveMode === 'prepaid' ? estimatePrepaidCost(zone.tariff, durationMinutes) : 0),
-    [zone, effectiveMode, durationMinutes],
+    () => (tariff && effectiveMode === 'prepaid' ? estimatePrepaidCost(tariff, durationMinutes) : 0),
+    [tariff, effectiveMode, durationMinutes],
   );
 
   const balance = wallet?.balance ?? 0;
   const insufficient = effectiveMode === 'prepaid' && prepaidCost > balance;
-  const lowBalance = !insufficient && balance < (zone?.tariff.hourlyRate ?? 0);
+  const lowBalance = !insufficient && balance < (tariff?.hourlyRate ?? 0);
 
   if (isError) {
     return (
@@ -220,7 +229,7 @@ export default function StartParkingScreen() {
 
             <DetailRow
               label={t('zone.rate')}
-              value={`${formatRate(zone.tariff.hourlyRate)} ${t('common.perHour')}`}
+              value={`${formatRate((tariff ?? zone.tariff).hourlyRate)} ${t('common.perHour')}`}
             />
             <DetailRow
               label={t('zone.operatingHours')}
@@ -239,6 +248,16 @@ export default function StartParkingScreen() {
               }
             />
           </Card>
+
+          {trust && discount > 0 ? (
+            <InlineNotice
+              tone="info"
+              title={t('points.appliedDiscount', {
+                tier: t(`points.tier.${trust.tier}` as const),
+                percent: discount,
+              })}
+            />
+          ) : null}
 
           {/* ---- Mode + duration --------------------------------------- */}
           {zone.supportedModes.length > 1 ? (
@@ -304,7 +323,7 @@ export default function StartParkingScreen() {
                         {formatDurationShort(option.minutes * 60)}
                       </AppText>
                       <AppText variant="caption" color="textTertiary" numeric align="center">
-                        {formatMoney(estimatePrepaidCost(zone.tariff, option.minutes))}
+                        {formatMoney(estimatePrepaidCost(tariff ?? zone.tariff, option.minutes))}
                       </AppText>
                     </PressableScale>
                   );
@@ -380,7 +399,13 @@ export default function StartParkingScreen() {
             label={t('parking.start')}
             onPress={handleStart}
             loading={startParking.isPending}
-            disabled={!selected || Boolean(clashingSession) || insufficient || zone.availability === 'full'}
+            disabled={
+              !selected ||
+              Boolean(clashingSession) ||
+              insufficient ||
+              // Driver reports inform, they never block — only the operator's own level does.
+              (zone.crowd?.baseAvailability ?? zone.availability) === 'full'
+            }
             testID="start-parking-cta"
           />
         </View>

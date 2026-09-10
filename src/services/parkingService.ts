@@ -4,10 +4,12 @@ import { AppError } from '@/utils/errors';
 import { createId } from '@/utils/id';
 import { networkDelay } from '@/utils/async';
 import { addMinutes, nowIso, secondsBetween } from '@/utils/time';
-import { computeCost, estimatePrepaidCost, snapshotTariff } from '@/utils/pricing';
+import { computeCost, discountTariff, estimatePrepaidCost, snapshotTariff } from '@/utils/pricing';
 import { distanceMeters } from '@/utils/geo';
 import { FACILITIES, ZONES } from './mock/catalog';
 import { getDb, mutate, type MockDatabase } from './mock/db';
+import { needsZoneSeed, seedZoneReports, withCrowd } from './mock/community';
+import { computeTrust } from './mock/trust';
 import { assertSufficientBalance, makeReference, postTransaction, requireWallet } from './mock/ledger';
 
 /**
@@ -27,6 +29,13 @@ function zoneOrThrow(zoneId: string): ParkingZone {
   const zone = ZONES.find((z) => z.id === zoneId);
   if (!zone) throw new AppError('not_found', 'Parking zone not found');
   return zone;
+}
+
+/** The shared DB, with the demo's "other drivers" reports seeded if the feed has gone quiet. */
+async function dbWithZoneReports(): Promise<MockDatabase> {
+  const db = await getDb();
+  if (needsZoneSeed(db)) await mutate(seedZoneReports);
+  return db;
 }
 
 function sessionOrThrow(db: MockDatabase, sessionId: string): ParkingSession {
@@ -114,19 +123,21 @@ export const mockParkingService: ParkingService = {
         .sort((a, b) => distanceMeters(origin, a.location) - distanceMeters(origin, b.location));
     }
 
-    return zones;
+    const db = await dbWithZoneReports();
+    return zones.map((zone) => withCrowd(db, zone));
   },
 
   async getZone(zoneId) {
     await networkDelay(120, 260);
-    return zoneOrThrow(zoneId);
+    const zone = zoneOrThrow(zoneId);
+    return withCrowd(await dbWithZoneReports(), zone);
   },
 
   async getZoneByCode(code) {
     await networkDelay(160, 320);
     const zone = ZONES.find((z) => z.code.toLowerCase() === code.trim().toLowerCase());
     if (!zone) throw new AppError('not_found', 'No zone matches that code');
-    return zone;
+    return withCrowd(await dbWithZoneReports(), zone);
   },
 
   async getFacility(facilityId) {
@@ -166,11 +177,15 @@ export const mockParkingService: ParkingService = {
       }
 
       const startedAt = nowIso();
-      const rateSnapshot = snapshotTariff(zone.tariff, startedAt);
+      // The loyalty tier is read once at start and frozen with the rate, so a
+      // tier change mid-session cannot re-price it either.
+      const { discountPercent } = computeTrust(db, input.userId);
+      const tariff = discountTariff(zone.tariff, discountPercent);
+      const rateSnapshot = snapshotTariff(tariff, startedAt, discountPercent || undefined);
 
       let prepaidCost = 0;
       if (input.mode === 'prepaid') {
-        prepaidCost = estimatePrepaidCost(zone.tariff, input.durationMinutes!);
+        prepaidCost = estimatePrepaidCost(tariff, input.durationMinutes!);
         assertSufficientBalance(db, input.userId, prepaidCost);
       }
 
@@ -319,7 +334,10 @@ export const mockParkingService: ParkingService = {
       }
 
       const zone = zoneOrThrow(session.parkingZoneId);
-      const extraCost = estimatePrepaidCost(zone.tariff, additionalMinutes);
+      const extraCost = estimatePrepaidCost(
+        discountTariff(zone.tariff, session.rateSnapshot.loyaltyDiscountPercent ?? 0),
+        additionalMinutes,
+      );
       assertSufficientBalance(db, session.userId, extraCost);
 
       // Extending from the current expiry, not from now, so the driver never

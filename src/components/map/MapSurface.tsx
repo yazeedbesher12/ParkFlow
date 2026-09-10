@@ -3,9 +3,11 @@ import L from 'leaflet';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { ZoneMarker } from './ZoneMarker';
+import { CheckpointMarker } from './CheckpointMarker';
+import { LandmarkMarker } from './LandmarkMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
-import type { GeoRegion } from '@/types';
+import type { GeoPoint, GeoRegion } from '@/types';
 
 /**
  * Default (web) implementation — react-native-maps has no browser build.
@@ -62,6 +64,10 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     onPressBackground,
     userLocation,
     onRegionChangeComplete,
+    checkpoints,
+    onSelectCheckpoint,
+    route,
+    landmark,
     style,
   },
   ref,
@@ -131,6 +137,30 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     map.fitBounds(toBounds(region));
   }, [region]);
 
+  // Routes are Leaflet polylines — they belong to the map, not the pin overlay.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !route) return;
+    const toLatLngs = (line: GeoPoint[]) =>
+      line.map((point) => [point.latitude, point.longitude] as L.LatLngTuple);
+
+    const layers = [
+      ...route.alternatives.map((line) =>
+        L.polyline(toLatLngs(line), {
+          color: colors.textTertiary,
+          weight: 4,
+          opacity: 0.85,
+          dashArray: '8 8',
+        }),
+      ),
+      // A light casing under the route keeps it readable on satellite imagery.
+      L.polyline(toLatLngs(route.coordinates), { color: colors.surface, weight: 9, opacity: 0.9 }),
+      L.polyline(toLatLngs(route.coordinates), { color: colors.brand, weight: 5 }),
+    ];
+    layers.forEach((layer) => layer.addTo(map));
+    return () => layers.forEach((layer) => layer.remove());
+  }, [route, colors]);
+
   useImperativeHandle(ref, () => ({
     animateToRegion: (next, durationMs = 600) =>
       mapRef.current?.flyToBounds(toBounds(next), { duration: durationMs / 1000 }),
@@ -185,6 +215,41 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
               />
             </View>
           ) : null}
+
+          {checkpoints?.map((checkpoint) => {
+            const { x, y } = project(checkpoint.location.latitude, checkpoint.location.longitude);
+            if (x < -80 || y < -40 || x > size.x + 80 || y > size.y + 40) return null;
+
+            return (
+              <Pressable
+                key={checkpoint.id}
+                onPress={() => onSelectCheckpoint?.(checkpoint.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${checkpoint.name}, ${checkpoint.status}`}
+                style={{ position: 'absolute', left: x - 75, top: y - 15, width: 150, alignItems: 'center' }}
+              >
+                <CheckpointMarker
+                  status={checkpoint.status}
+                  assumed={checkpoint.assumed}
+                  label={checkpoint.name}
+                />
+              </Pressable>
+            );
+          })}
+
+          {landmark
+            ? (() => {
+                const { x, y } = project(landmark.location.latitude, landmark.location.longitude);
+                return (
+                  <View
+                    pointerEvents="none"
+                    style={{ position: 'absolute', left: x - 95, top: y - 16, width: 190, alignItems: 'center' }}
+                  >
+                    <LandmarkMarker name={landmark.name} />
+                  </View>
+                );
+              })()
+            : null}
 
           {zones.map((zone) => {
             const { x, y } = project(zone.location.latitude, zone.location.longitude);

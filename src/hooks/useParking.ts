@@ -67,6 +67,8 @@ function useParkingInvalidation() {
     void queryClient.invalidateQueries({ queryKey: ['wallet'] });
     void queryClient.invalidateQueries({ queryKey: ['transactions'] });
     void queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    // Paid sessions raise the trust score.
+    void queryClient.invalidateQueries({ queryKey: ['trust'] });
   };
 }
 
