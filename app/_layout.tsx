@@ -16,6 +16,7 @@ import {
 
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore } from '@/store/authStore';
+import { useBackendSync } from '@/hooks/useBackendSync';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { isAppError } from '@/utils/errors';
 
@@ -90,6 +91,7 @@ function RootNavigator() {
 }
 
 function AppShell() {
+  useBackendSync();
   const { colors } = useTheme();
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,

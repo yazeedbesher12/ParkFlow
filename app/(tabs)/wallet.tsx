@@ -70,7 +70,7 @@ export default function WalletScreen() {
         <AppText variant="h1">{t('wallet.title')}</AppText>
 
         {/* ---- Balance card -------------------------------------------- */}
-        <View style={[{ borderRadius: radius.xxl, overflow: 'hidden' }, shadow.lg]}>
+        <View style={[{ borderRadius: radius.xxl, overflow: 'hidden' }, shadow.sm]}>
           <LinearGradient
             colors={[colors.deep, colors.deepAlt]}
             start={{ x: 0, y: 0 }}
@@ -117,7 +117,7 @@ export default function WalletScreen() {
                     flex: 1,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    height: 46,
+                    height: 48,
                     borderRadius: radius.md,
                     backgroundColor: 'rgba(255,255,255,0.12)',
                   }}
@@ -133,7 +133,7 @@ export default function WalletScreen() {
                 size="md"
                 fullWidth={false}
                 onPress={() => router.push('/wallet/topup')}
-                style={{ height: 46, paddingHorizontal: spacing.lg }}
+                style={{ height: 48, paddingHorizontal: spacing.lg }}
               />
             </View>
           </LinearGradient>

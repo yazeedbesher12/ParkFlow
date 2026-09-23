@@ -4,7 +4,7 @@ import { IconButton } from './IconButton';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
-import { fontFamily, maxFontSizeMultiplier } from '@/theme/typography';
+import { fontFamily, systemFallback, maxFontSizeMultiplier } from '@/theme/typography';
 import { useLocale } from '@/hooks/useLocale';
 
 export interface SearchFieldProps {
@@ -32,7 +32,7 @@ export function SearchField({
   testID,
 }: SearchFieldProps) {
   const { colors } = useTheme();
-  const { row, textAlign, t } = useLocale();
+  const { row, textAlign, isRTL, t } = useLocale();
 
   return (
     <View
@@ -66,7 +66,8 @@ export function SearchField({
         style={{
           flex: 1,
           color: colors.text,
-          fontFamily: fontFamily.medium,
+          fontFamily: isRTL ? systemFallback : fontFamily.medium,
+          fontWeight: isRTL ? '500' : undefined,
           fontSize: 15,
           textAlign,
           paddingVertical: 0,

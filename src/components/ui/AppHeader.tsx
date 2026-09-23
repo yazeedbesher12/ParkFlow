@@ -53,7 +53,7 @@ export function AppHeader({
           alignItems: size === 'large' ? 'flex-start' : 'center',
           gap: spacing.md,
           minHeight: 48,
-          marginBottom: size === 'large' ? spacing.lg : spacing.md,
+          marginBottom: size === 'large' ? spacing.xxl : spacing.lg,
         },
         style,
       ]}
@@ -74,7 +74,7 @@ export function AppHeader({
         />
       ) : null}
 
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={{ flex: 1, gap: spacing.xs }}>
         {title ? (
           <AppText
             variant={size === 'large' ? 'h1' : 'h3'}

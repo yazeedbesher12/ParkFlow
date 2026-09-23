@@ -1,36 +1,28 @@
 import type { Services } from './types';
-import { mockAuthService } from './authService';
-import { mockVehicleService } from './vehicleService';
-import { mockParkingService } from './parkingService';
-import { mockWalletService } from './walletService';
-import { mockPaymentService } from './paymentService';
-import { mockViolationService } from './violationService';
-import { mockNotificationService } from './notificationService';
-import { mockProfileService } from './profileService';
-import { mockRoadService } from './roadService';
-import { osrmRoutingService } from './routingService';
-import { mockTrustService } from './trustService';
+import { httpAuthService } from './http/authService';
+import { httpVehicleService } from './http/vehicleService';
+import { httpParkingService } from './http/parkingService';
+import { httpWalletService } from './http/walletService';
+import { httpPaymentService } from './http/paymentService';
+import { httpViolationService } from './http/violationService';
+import { httpNotificationService } from './http/notificationService';
+import { httpProfileService } from './http/profileService';
+import { httpRoadService } from './http/roadService';
+import { httpRoutingService } from './http/routingService';
+import { httpTrustService } from './http/trustService';
 
-/**
- * Single composition point. Swapping the mock backend for HTTP means changing
- * the implementations here — no screen or hook needs to know.
- */
 export const services: Services = {
-  auth: mockAuthService,
-  vehicles: mockVehicleService,
-  parking: mockParkingService,
-  wallet: mockWalletService,
-  payments: mockPaymentService,
-  violations: mockViolationService,
-  notifications: mockNotificationService,
-  profile: mockProfileService,
-  roads: mockRoadService,
-  // Real routing: the public OSRM server, with a straight-line fallback offline.
-  routing: osrmRoutingService,
-  trust: mockTrustService,
+  auth: httpAuthService,
+  vehicles: httpVehicleService,
+  parking: httpParkingService,
+  wallet: httpWalletService,
+  payments: httpPaymentService,
+  violations: httpViolationService,
+  notifications: httpNotificationService,
+  profile: httpProfileService,
+  roads: httpRoadService,
+  routing: httpRoutingService,
+  trust: httpTrustService,
 };
-
 export * from './types';
-export { DEFAULT_REGION, ZONES, FACILITIES } from './mock/catalog';
-export { LANDMARKS } from './mock/landmarks';
-export { resetDb } from './mock/db';
+export { DEFAULT_REGION, LANDMARKS } from '../data/mapDefaults';

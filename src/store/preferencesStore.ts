@@ -69,7 +69,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         locale: state.locale,
         themeMode: state.themeMode,
         selectedVehicleId: state.selectedVehicleId,
-        notifications: state.notifications,
+
         onboardingComplete: state.onboardingComplete,
       }),
       onRehydrateStorage: () => (state) => state?.setHydrated(),

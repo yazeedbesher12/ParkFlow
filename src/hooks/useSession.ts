@@ -26,7 +26,7 @@ export function useCurrentUser() {
     queryKey: queryKeys.profile(userId ?? 'anonymous'),
     queryFn: () => services.profile.get(userId!),
     enabled: Boolean(userId),
-    // The store copy is authoritative for rendering; this refreshes it.
+    // The store copy is a cache; the backend remains authoritative.
     initialData: user,
   });
 

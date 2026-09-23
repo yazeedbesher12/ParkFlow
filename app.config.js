@@ -21,8 +21,11 @@ module.exports = () => {
 
   return {
     ...base.expo,
+    plugins: [...base.expo.plugins, 'expo-notifications'],
+    ...(process.env.EXPO_PUBLIC_EAS_PROJECT_ID ? {extra:{...base.expo.extra,eas:{projectId:process.env.EXPO_PUBLIC_EAS_PROJECT_ID}}}:{}),
     android: {
       ...base.expo.android,
+      ...(process.env.GOOGLE_SERVICES_JSON ? {googleServicesFile:process.env.GOOGLE_SERVICES_JSON}:{}),
       ...(apiKey ? { config: { googleMaps: { apiKey } } } : null),
     },
   };

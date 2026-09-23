@@ -108,18 +108,18 @@ export function ActiveSessionBanner({
             paddingVertical: spacing.md,
             paddingHorizontal: spacing.lg,
             borderRadius: radius.xl,
-            backgroundColor: isOverstay ? colors.danger : colors.deep,
+            backgroundColor: isOverstay ? colors.dangerDeep : colors.deep,
           },
           shadow.lg,
         ]}
       >
-        <LivePulse color={isOverstay ? colors.onDeep : colors.accent} />
+        <LivePulse color={colors.onDeep} />
 
         <View style={{ flex: 1, gap: 3 }}>
           <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
             <AppText
               variant="overline"
-              style={{ color: isOverstay ? colors.onDeep : colors.accent }}
+              style={{ color: colors.onDeep }}
             >
               {isOverstay ? t('parking.overstay') : t('parking.active')}
             </AppText>

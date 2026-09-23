@@ -29,7 +29,7 @@ export function SectionHeader({ title, subtitle, action, trailing, style }: Sect
         style,
       ]}
     >
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={{ flex: 1, gap: spacing.xs }}>
         <AppText variant="h3">{title}</AppText>
         {subtitle ? (
           <AppText variant="bodySm" color="textSecondary">

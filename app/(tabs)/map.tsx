@@ -464,7 +464,7 @@ export default function MapScreen() {
 
         {locationStatus === 'denied' ? (
           <Reveal>
-            <Card tone="plain" padding="md" style={shadow.sm}>
+            <Card tone="plain" padding="md" style={[shadow.sm, { marginEnd: 56 }]}>
               <AppText variant="title">{t('map.locationDenied')}</AppText>
               <AppText variant="bodySm" color="textSecondary">
                 {t('map.locationDeniedBody')}
@@ -586,7 +586,11 @@ export default function MapScreen() {
           <View style={{ gap: spacing.sm }}>
             <View
               style={{
-                paddingHorizontal: screenPadding,
+                marginHorizontal: screenPadding,
+                paddingHorizontal: spacing.md,
+                paddingVertical: spacing.sm,
+                borderRadius: radius.md,
+                backgroundColor: colors.surface,
                 flexDirection: row,
                 alignItems: 'center',
                 gap: spacing.sm,

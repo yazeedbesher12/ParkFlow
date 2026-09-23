@@ -50,12 +50,12 @@ export function Segmented<T extends string>({
           justifyContent: 'center',
           gap: spacing.xs + 2,
           paddingHorizontal: variant === 'inset' ? spacing.sm : spacing.lg,
-          height: variant === 'inset' ? 38 : 40,
-          borderRadius: radius.pill,
+          minHeight: 44,
+          borderRadius: radius.md,
           backgroundColor: active
             ? variant === 'inset'
               ? colors.surface
-              : colors.deep
+              : colors.brandSoft
             : 'transparent',
         }}
       >
@@ -66,7 +66,7 @@ export function Segmented<T extends string>({
             color: active
               ? variant === 'inset'
                 ? colors.text
-                : colors.onDeep
+                : colors.successText
               : colors.textSecondary,
           }}
         >
@@ -76,7 +76,7 @@ export function Segmented<T extends string>({
           <AppText
             variant="caption"
             numeric
-            style={{ color: active ? (variant === 'inset' ? colors.brand : colors.accent) : colors.textTertiary }}
+            style={{ color: active ? colors.successText : colors.textTertiary }}
           >
             {option.badge}
           </AppText>
@@ -93,7 +93,7 @@ export function Segmented<T extends string>({
             flexDirection: row,
             padding: 4,
             gap: 4,
-            borderRadius: radius.pill,
+            borderRadius: radius.md,
             backgroundColor: colors.surfaceAlt,
           },
           style,

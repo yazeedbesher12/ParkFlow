@@ -34,7 +34,7 @@ export interface AppButtonProps {
   testID?: string;
 }
 
-const heights: Record<ButtonSize, number> = { lg: 56, md: 48, sm: 38 };
+const heights: Record<ButtonSize, number> = { lg: 56, md: 48, sm: 44 };
 const paddings: Record<ButtonSize, number> = { lg: spacing.xxl, md: spacing.xl, sm: spacing.lg };
 
 export function AppButton({
@@ -98,7 +98,7 @@ export function AppButton({
         };
       case 'inverse':
         return {
-          container: { backgroundColor: colors.surface, ...shadow.md } as ViewStyle,
+          container: { backgroundColor: colors.onDeep, ...shadow.xs } as ViewStyle,
           textColor: colors.deep,
           spinnerColor: colors.deep,
         };
@@ -126,7 +126,8 @@ export function AppButton({
         styles.base,
         container,
         {
-          height: heights[size],
+          minHeight: heights[size],
+          paddingVertical: spacing.md,
           paddingHorizontal: paddings[size],
           flexDirection: row,
           alignSelf: fullWidth ? 'stretch' : 'flex-start',

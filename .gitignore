@@ -49,3 +49,29 @@ yarn-error.*
 device-*.png
 pf-*.png
 *.uiautomator.xml
+
+# Backend runtime and secrets
+server/dist/
+server/coverage/
+.env
+.env.*
+!.env.example
+!server/.env.example
+
+.npm-cache/
+
+.runtime/
+.prisma-cache/
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Editors
+.vscode/
+.idea/
+
+# Coverage anywhere
+coverage/
+
+# Logs
+*.log

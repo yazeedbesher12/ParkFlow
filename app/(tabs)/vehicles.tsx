@@ -62,7 +62,7 @@ export default function VehiclesScreen() {
             <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} tintColor={colors.brand} />
           }
           contentContainerStyle={{
-            gap: spacing.md,
+            gap: spacing.lg,
             paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
             flexGrow: 1,
           }}

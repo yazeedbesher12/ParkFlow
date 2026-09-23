@@ -139,14 +139,14 @@ export default function ActiveParkingScreen() {
     );
   };
 
-  const accent = isOverstay ? colors.danger : colors.accent;
+  const accent = colors.onDeep;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.deep }}>
       <StatusBar style="light" />
 
       <LinearGradient
-        colors={isOverstay ? [colors.deepAlt, '#3B0D10'] : [colors.deepAlt, colors.deep]}
+        colors={isOverstay ? [colors.deepAlt, colors.dangerDeep] : [colors.deepAlt, colors.deep]}
         style={{ flex: 1 }}
       >
         <View

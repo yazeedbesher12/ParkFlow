@@ -24,7 +24,7 @@ const DEMO_VEHICLE = { plateNumber: '1234567', type: 'private', make: 'Kia', mod
 
 export default function WelcomeScreen() {
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { t, row } = useLocale();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -45,9 +45,10 @@ export default function WelcomeScreen() {
   const demoLogin = useMutation({
     mutationFn: async () => {
       const challenge = await services.auth.requestOtp(DEMO_PHONE);
+      if (!challenge.devCode) throw new Error('Quick login requires the development SMS adapter. Use phone login.');
       const { session, user } = await services.auth.verifyOtp({
         challengeId: challenge.challengeId,
-        code: challenge.devCode ?? '123456',
+        code: challenge.devCode!,
       });
       const profile = user.fullName
         ? user
@@ -66,12 +67,12 @@ export default function WelcomeScreen() {
   });
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.deep }}>
-      <StatusBar style="light" />
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <StatusBar style={isDark ? "light" : "dark"} />
 
       <LinearGradient
-        colors={[colors.deepAlt, colors.deep, colors.brand]}
-        locations={[0, 0.55, 1.6]}
+        colors={[colors.brandSoft, colors.background, colors.background]}
+        locations={[0, 0.55, 1]}
         style={{ flex: 1 }}
       >
         {/* Soft light bloom behind the mark — one gradient, used once. */}
@@ -84,8 +85,8 @@ export default function WelcomeScreen() {
             width: 380,
             height: 380,
             borderRadius: 190,
-            backgroundColor: colors.accent,
-            opacity: 0.13,
+            backgroundColor: colors.brand,
+            opacity: 0.04,
           }}
         />
 
@@ -98,24 +99,24 @@ export default function WelcomeScreen() {
           }}
         >
           <Reveal delay={80} style={{ alignItems: 'center' }}>
-            <LogoMark size={92} tone="light" />
+            <LogoMark size={92} tone="dark" />
           </Reveal>
 
           <Reveal delay={180} style={{ marginTop: spacing.xxxl, gap: spacing.md }}>
-            <AppText variant="display" align="center" color="onDeep">
+            <AppText variant="display" align="center" color="text">
               {t('brand.name')}
             </AppText>
             <AppText
               variant="h2"
               align="center"
-              style={{ color: colors.accent, letterSpacing: -0.2 }}
+              style={{ color: colors.brand, letterSpacing: -0.2 }}
             >
               {t('brand.tagline')}
             </AppText>
             <AppText
               variant="bodyLg"
               align="center"
-              color="onDeepMuted"
+              color="textSecondary"
               style={{ maxWidth: 320, alignSelf: 'center' }}
             >
               {t('brand.subtitle')}
@@ -135,7 +136,7 @@ export default function WelcomeScreen() {
                   paddingVertical: spacing.md,
                   paddingHorizontal: spacing.lg,
                   borderRadius: radius.lg,
-                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: colors.surface,
                 }}
               >
                 <View
@@ -145,15 +146,15 @@ export default function WelcomeScreen() {
                     borderRadius: radius.md,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: 'rgba(255,255,255,0.12)',
+                    backgroundColor: colors.brandSoft,
                   }}
                 >
-                  <Icon size={18} color={colors.accent} strokeWidth={2.2} />
+                  <Icon size={18} color={colors.brand} strokeWidth={2.2} />
                 </View>
-                <AppText variant="title" color="onDeep" style={{ flex: 1 }}>
+                <AppText variant="title" color="text" style={{ flex: 1 }}>
                   {label}
                 </AppText>
-                <AppText variant="caption" color="onDeepMuted" numeric>
+                <AppText variant="caption" color="textSecondary" numeric>
                   {String(index + 1).padStart(2, '0')}
                 </AppText>
               </View>
@@ -164,23 +165,23 @@ export default function WelcomeScreen() {
             <AppButton
               label={t('onboarding.getStarted')}
               onPress={goToPhone}
-              variant="inverse"
+              variant="primary"
               testID="welcome-get-started"
             />
             <AppButton
               label={t('onboarding.login')}
               onPress={goToPhone}
-              variant="ghostInverse"
+              variant="ghost"
               style={{ height: 48 }}
             />
-            <AppButton
+            {__DEV__ && process.env.EXPO_PUBLIC_ENABLE_DEMO_LOGIN === 'true' ? <AppButton
               label={t('onboarding.demoLogin')}
               onPress={() => demoLogin.mutate()}
               loading={demoLogin.isPending}
-              variant="ghostInverse"
+              variant="ghost"
               style={{ height: 48 }}
               testID="welcome-demo-login"
-            />
+            /> : null}
           </Reveal>
         </View>
       </LinearGradient>

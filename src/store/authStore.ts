@@ -37,13 +37,19 @@ export const useAuthStore = create<AuthState>()((set) => ({
         return;
       }
       const parsed = JSON.parse(raw) as PersistedAuth;
-      const expired = new Date(parsed.session.expiresAt).getTime() < Date.now();
-      if (expired) {
-        await secureStorage.removeItem(STORAGE_KEYS.authSession);
-        set({ hydrated: true });
-        return;
+      // A stored user is a rendering cache; the backend refreshes identity and authorizes every request.
+      set({ session: parsed.session, user: parsed.user });
+      const { api } = await import('@/services/http/apiClient');
+      try {
+        const user = await api<User>('/auth/me');
+        useAuthStore.getState().setUser(user);
+      } catch (error) {
+        // Preserve the refresh token for a temporary network outage, never for a revoked session.
+        if (error instanceof Error && 'code' in error && error.code === 'unauthorized') {
+          await useAuthStore.getState().signOut();
+        }
       }
-      set({ session: parsed.session, user: parsed.user, hydrated: true });
+      set({ hydrated: true });
     } catch {
       // A corrupt blob must never brick the app — drop it and start signed out.
       await secureStorage.removeItem(STORAGE_KEYS.authSession).catch(() => undefined);

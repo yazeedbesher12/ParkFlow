@@ -2,6 +2,7 @@ import { Text, type TextProps, type TextStyle } from 'react-native';
 import { useMemo } from 'react';
 import {
   fontFamily,
+  systemFallback,
   maxFontSizeMultiplier,
   typography,
   type FontWeightToken,
@@ -51,14 +52,17 @@ export function AppText({
   ...rest
 }: AppTextProps) {
   const { colors } = useTheme();
-  const { textAlign } = useLocale();
+  const { textAlign, isRTL } = useLocale();
   const spec = typography[variant];
 
   const computed = useMemo<TextStyle>(() => {
     const resolvedAlign =
       align ?? (forceLtrAlign ? 'left' : (textAlign as TextStyle['textAlign']));
     return {
-      fontFamily: fontFamily[weight ?? spec.weight],
+      fontFamily: isRTL ? systemFallback : fontFamily[weight ?? spec.weight],
+      fontWeight: isRTL
+        ? ({ regular: '400', medium: '500', semibold: '600', bold: '700', extrabold: '800' } as const)[weight ?? spec.weight]
+        : undefined,
       fontSize: spec.fontSize,
       lineHeight: spec.lineHeight,
       letterSpacing: spec.letterSpacing,
@@ -67,7 +71,7 @@ export function AppText({
       textAlign: resolvedAlign,
       ...(numeric ? { fontVariant: ['tabular-nums' as const] } : null),
     };
-  }, [align, colors, color, forceLtrAlign, numeric, spec, textAlign, weight]);
+  }, [align, colors, color, forceLtrAlign, numeric, spec, textAlign, isRTL, weight]);
 
   return (
     <Text maxFontSizeMultiplier={maxFontSizeMultiplier} style={[computed, style]} {...rest} />

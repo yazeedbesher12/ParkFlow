@@ -54,7 +54,7 @@ export function Screen({
     tone === 'deep' ? colors.deep : tone === 'sunken' ? colors.surfaceSunken : colors.background;
 
   const padding: ViewStyle = {
-    paddingTop: safeTop ? insets.top : 0,
+    paddingTop: safeTop ? insets.top + (edgeToEdge ? 0 : spacing.md) : 0,
     paddingBottom: safeBottom ? insets.bottom + bottomInset : bottomInset,
     paddingHorizontal: edgeToEdge ? 0 : screenPadding,
   };

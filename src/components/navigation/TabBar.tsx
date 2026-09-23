@@ -108,7 +108,7 @@ function TabItem({
         numberOfLines={1}
         style={{
           color: focused ? colors.text : colors.textTertiary,
-          fontSize: 11,
+          fontSize: 12,
         }}
       >
         {labelKey ? t(labelKey) : routeName}
@@ -147,10 +147,10 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             borderRadius: radius.xxl,
             paddingHorizontal: spacing.xs,
             paddingVertical: spacing.xs,
-            borderWidth: 1,
+            borderWidth: 0,
             borderColor: colors.border,
           },
-          shadow.lg,
+          shadow.md,
         ]}
       >
         {state.routes.map((route, index) => {

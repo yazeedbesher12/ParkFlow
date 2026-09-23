@@ -49,7 +49,7 @@ export function ListItem({
           flexDirection: row,
           alignItems: 'center',
           gap: spacing.md,
-          paddingVertical: spacing.md,
+          paddingVertical: spacing.lg,
           paddingHorizontal: tone === 'card' ? spacing.lg : 0,
           borderRadius: tone === 'card' ? radius.lg : 0,
           backgroundColor: tone === 'card' ? colors.surface : 'transparent',
@@ -63,7 +63,7 @@ export function ListItem({
     >
       {leading}
 
-      <View style={{ flex: 1, gap: 2 }}>
+      <View style={{ flex: 1, gap: spacing.xs }}>
         <AppText variant="titleLg" color={destructive ? 'danger' : 'text'} numberOfLines={1}>
           {title}
         </AppText>

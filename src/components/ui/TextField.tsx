@@ -12,7 +12,7 @@ import { AppText } from './AppText';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
-import { fontFamily, maxFontSizeMultiplier } from '@/theme/typography';
+import { fontFamily, systemFallback, maxFontSizeMultiplier } from '@/theme/typography';
 import { duration } from '@/theme/motion';
 import { useLocale } from '@/hooks/useLocale';
 
@@ -45,7 +45,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
   ref,
 ) {
   const { colors } = useTheme();
-  const { row, textAlign } = useLocale();
+  const { row, textAlign, isRTL } = useLocale();
   const [focused, setFocused] = useState(false);
 
   const focus = useSharedValue(0);
@@ -77,7 +77,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             backgroundColor: colors.surface,
             borderRadius: radius.lg,
             paddingHorizontal: spacing.lg,
-            minHeight: emphasis === 'strong' ? 62 : 54,
+            minHeight: emphasis === 'strong' ? 64 : 56,
           },
           animatedBorder,
           inputStyle,
@@ -94,7 +94,8 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             // with a leading element off the edge on narrow phones.
             minWidth: 0,
             color: colors.text,
-            fontFamily: emphasis === 'strong' ? fontFamily.bold : fontFamily.medium,
+            fontFamily: isRTL ? systemFallback : emphasis === 'strong' ? fontFamily.bold : fontFamily.medium,
+            fontWeight: isRTL ? (emphasis === 'strong' ? '700' : '500') : undefined,
             fontSize: emphasis === 'strong' ? 20 : 16,
             letterSpacing: emphasis === 'strong' ? 0.4 : 0,
             textAlign,

@@ -1,3 +1,6 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/services/http/apiClient';
+import { useUserId } from '@/hooks/useSession';
 import { View } from 'react-native';
 import { Check, Languages, Moon, Sun, SunMoon } from 'lucide-react-native';
 
@@ -39,8 +42,12 @@ export default function SettingsScreen() {
   const { colors, mode, setMode } = useTheme();
   const { t, locale, setLocale, row } = useLocale();
 
-  const notifications = usePreferencesStore((s) => s.notifications);
-  const setNotificationPreference = usePreferencesStore((s) => s.setNotificationPreference);
+  const userId = useUserId();
+  const queryClient = useQueryClient();
+  const preferenceQuery = useQuery({queryKey:['notification-preferences',userId],queryFn:()=>api<NotificationPreferences>('/users/me/notification-preferences'),enabled:!!userId});
+  const notifications = preferenceQuery.data ?? {parkingReminders:true,expiryWarnings:true,lowBalance:true,violations:true,promotions:false};
+  const updatePreferences = useMutation({mutationFn:(next:NotificationPreferences)=>api<NotificationPreferences>('/users/me/notification-preferences',{method:'PATCH',body:next}),onSuccess:data=>queryClient.setQueryData(['notification-preferences',userId],data)});
+  const setNotificationPreference = (key:keyof NotificationPreferences,value:boolean) => updatePreferences.mutate({...notifications,[key]:value});
 
   const themeOptions: ThemeMode[] = ['light', 'dark', 'system'];
 
@@ -146,6 +153,7 @@ export default function SettingsScreen() {
                 <SwitchRow
                   label={t(`profile.prefs.${key}` as const)}
                   value={notifications[key]}
+                  disabled={preferenceQuery.isPending || updatePreferences.isPending}
                   onValueChange={(value) => setNotificationPreference(key, value)}
                 />
               </View>

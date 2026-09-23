@@ -38,7 +38,7 @@ export interface TimerRingProps {
 export function TimerRing({
   progress,
   size = 260,
-  strokeWidth = 10,
+  strokeWidth = 8,
   overstay = false,
   children,
   style,
@@ -66,7 +66,7 @@ export function TimerRing({
 
   const glowStyle = useAnimatedStyle(() => ({
     transform: [{ scale: 1 + glow.value * 0.06 }],
-    opacity: 0.1 + glow.value * 0.08,
+    opacity: 0.04 + glow.value * 0.04,
   }));
 
   const arcColor = overstay ? colors.danger : colors.accent;
@@ -93,7 +93,7 @@ export function TimerRing({
         <Defs>
           <LinearGradient id="ringArc" x1="0" y1="0" x2="1" y2="1">
             <Stop offset="0" stopColor={overstay ? colors.danger : colors.accent} />
-            <Stop offset="1" stopColor={overstay ? '#FF9CA0' : colors.brand} />
+            <Stop offset="1" stopColor={colors.onDeepMuted} />
           </LinearGradient>
         </Defs>
 

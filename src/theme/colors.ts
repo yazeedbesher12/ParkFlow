@@ -1,50 +1,50 @@
 /**
- * Brand identity: deep emerald + fresh parking green.
+ * Brand identity: calm forest green, sage and warm off-white.
  * Every colour the app draws must come from here — never inline hex in screens.
  */
 
 const palette = {
   // Deep emerald — brand identity, dark surfaces, splash, hero areas
-  emerald950: '#03221B',
-  emerald900: '#04352A',
-  emerald800: '#065240',
-  emerald700: '#076D53',
-  emerald600: '#0A8F5F',
-  emerald500: '#12B076',
-  emerald400: '#22C58B',
-  emerald300: '#5BDCAC',
-  emerald200: '#9BEDCC',
-  emerald100: '#D3F8E7',
-  emerald50: '#EDFCF5',
+  emerald950: '#284F44',
+  emerald900: '#1F5A4A',
+  emerald800: '#346B59',
+  emerald700: '#194B3E',
+  emerald600: '#1F5A4A',
+  emerald500: '#4F8A78',
+  emerald400: '#79AB97',
+  emerald300: '#ACD0BF',
+  emerald200: '#C7DFD3',
+  emerald100: '#EAF4F0',
+  emerald50: '#F0F6F2',
 
   // Neutrals — very slightly green-tinted so they sit with the brand
-  neutral900: '#0B1F1A',
-  neutral800: '#152A25',
-  neutral700: '#2C3F39',
-  neutral600: '#475A54',
-  neutral500: '#6B7C76',
-  neutral400: '#8FA09A',
-  neutral300: '#B7C4BF',
-  neutral200: '#DCE4E1',
-  neutral100: '#EDF2F0',
-  neutral50: '#F6F8F7',
+  neutral900: '#1F2D2A',
+  neutral800: '#2D3D37',
+  neutral700: '#43544C',
+  neutral600: '#606E67',
+  neutral500: '#6E7B76',
+  neutral400: '#606E67',
+  neutral300: '#A6B8AE',
+  neutral200: '#DDE5E1',
+  neutral100: '#EAF0EC',
+  neutral50: '#F7F5F0',
   white: '#FFFFFF',
   black: '#000000',
 
-  amber600: '#B45309',
-  amber500: '#F59E0B',
-  amber100: '#FEF3C7',
+  amber600: '#805E30',
+  amber500: '#C89B5B',
+  amber100: '#F6EEDF',
 
-  red600: '#C3282C',
-  red500: '#E5484D',
-  red100: '#FEE4E2',
+  red600: '#9F4747',
+  red500: '#B34F50',
+  red100: '#F8E9E6',
 
-  blue600: '#1D5FD1',
-  blue500: '#2E7DF7',
-  blue100: '#DBE9FE',
+  blue600: '#436B82',
+  blue500: '#537D94',
+  blue100: '#E8EFF3',
 
-  violet500: '#7C5CFC',
-  violet100: '#EAE4FF',
+  violet500: '#807292',
+  violet100: '#EFEBF3',
 };
 
 export type ColorScheme = {
@@ -91,6 +91,7 @@ export type ColorScheme = {
   warningSoft: string;
   warningText: string;
   danger: string;
+  dangerDeep: string;
   dangerSoft: string;
   dangerText: string;
   info: string;
@@ -115,8 +116,8 @@ export const lightColors: ColorScheme = {
   deep: palette.emerald900,
   deepAlt: palette.emerald950,
   onDeep: palette.white,
-  onDeepMuted: 'rgba(255,255,255,0.66)',
-  accent: palette.emerald400,
+  onDeepMuted: 'rgba(255,255,255,0.82)',
+  accent: palette.amber500,
 
   background: palette.neutral50,
   surface: palette.white,
@@ -133,18 +134,20 @@ export const lightColors: ColorScheme = {
   divider: palette.neutral100,
 
   text: palette.neutral900,
+  // Slightly deepen the secondary gray for readable small text on tinted surfaces.
   textSecondary: palette.neutral600,
   textTertiary: palette.neutral400,
   textInverse: palette.white,
   textOnColor: palette.white,
 
-  success: palette.emerald500,
+  success: palette.emerald600,
   successSoft: palette.emerald100,
   successText: palette.emerald700,
   warning: palette.amber500,
   warningSoft: palette.amber100,
   warningText: palette.amber600,
   danger: palette.red500,
+  dangerDeep: '#894344',
   dangerSoft: palette.red100,
   dangerText: palette.red600,
   info: palette.blue500,
@@ -153,63 +156,64 @@ export const lightColors: ColorScheme = {
   neutralSoft: palette.neutral100,
   neutralText: palette.neutral600,
 
-  mapWater: '#CFE3F5',
-  mapLand: '#EDF0EE',
+  mapWater: '#DCE9E9',
+  mapLand: '#F0F2EB',
   skeleton: palette.neutral200,
   skeletonHighlight: palette.neutral100,
 };
 
 export const darkColors: ColorScheme = {
-  brand: palette.emerald500,
-  brandPressed: palette.emerald400,
-  brandSoft: 'rgba(18,176,118,0.16)',
-  brandSofter: 'rgba(18,176,118,0.09)',
+  brand: palette.emerald300,
+  brandPressed: palette.emerald200,
+  brandSoft: 'rgba(172,208,191,0.16)',
+  brandSofter: 'rgba(172,208,191,0.09)',
   onBrand: palette.emerald950,
-  deep: '#061B16',
-  deepAlt: '#03110E',
+  deep: '#284F44',
+  deepAlt: '#2C453C',
   onDeep: palette.white,
-  onDeepMuted: 'rgba(255,255,255,0.6)',
+  onDeepMuted: 'rgba(255,255,255,0.82)',
   accent: palette.emerald300,
 
-  background: '#071411',
-  surface: '#0E211C',
-  surfaceAlt: '#152B24',
-  surfaceSunken: '#0A1A16',
+  background: '#202C27',
+  surface: '#293831',
+  surfaceAlt: '#33443B',
+  surfaceSunken: '#24312B',
   surfaceInverse: palette.white,
   overlay: 'rgba(0,0,0,0.6)',
   scrim: 'rgba(255,255,255,0.06)',
-  glass: 'rgba(14,33,28,0.8)',
+  glass: 'rgba(41,56,49,0.9)',
   glassBorder: 'rgba(255,255,255,0.08)',
 
-  border: '#1E352D',
-  borderStrong: '#2C4A40',
-  divider: '#172C25',
+  border: '#43564B',
+  borderStrong: '#5F7668',
+  divider: '#3A4D42',
 
   text: '#EAF3F0',
   textSecondary: '#9DB2AB',
-  textTertiary: '#6B837C',
+  textTertiary: '#AABBB2',
   textInverse: palette.neutral900,
   textOnColor: palette.white,
 
   success: palette.emerald400,
-  successSoft: 'rgba(34,197,139,0.15)',
+  successSoft: 'rgba(172,208,191,0.15)',
   successText: palette.emerald300,
   warning: palette.amber500,
-  warningSoft: 'rgba(245,158,11,0.16)',
-  warningText: '#FCD34D',
-  danger: '#FF6369',
-  dangerSoft: 'rgba(229,72,77,0.16)',
-  dangerText: '#FF9CA0',
+  warningSoft: 'rgba(200,155,91,0.16)',
+  warningText: '#E3C293',
+  danger: '#E5A09B',
+  dangerDeep: '#894344',
+  dangerSoft: 'rgba(229,160,155,0.16)',
+  dangerText: '#F0B9B3',
   info: palette.blue500,
-  infoSoft: 'rgba(46,125,247,0.16)',
-  infoText: '#8FB9FF',
-  neutralSoft: '#152B24',
+  infoSoft: 'rgba(158,192,211,0.16)',
+  infoText: '#B6D0DF',
+  neutralSoft: '#33443B',
   neutralText: '#9DB2AB',
 
-  mapWater: '#0F2A3D',
-  mapLand: '#101E1A',
-  skeleton: '#172C25',
-  skeletonHighlight: '#20382F',
+  mapWater: '#30474B',
+  mapLand: '#293831',
+  skeleton: '#3A4D42',
+  skeletonHighlight: '#4A6053',
 };
 
 export { palette };

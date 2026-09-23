@@ -74,7 +74,7 @@ export default function ActivityScreen() {
 
   return (
     <Screen layout="fixed" edgeToEdge safeBottom={false}>
-      <View style={{ paddingHorizontal: screenPadding, gap: spacing.lg, paddingBottom: spacing.md }}>
+      <View style={{ paddingHorizontal: screenPadding, paddingTop: spacing.md, gap: spacing.lg, paddingBottom: spacing.md }}>
         <AppText variant="h1">{t('activity.title')}</AppText>
         <Segmented options={options} value={filter} onChange={setFilter} />
       </View>
