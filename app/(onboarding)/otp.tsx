@@ -28,8 +28,7 @@ export default function OtpScreen() {
   const { t } = useLocale();
   const params = useLocalSearchParams<{
     challengeId: string;
-    phone: string;
-    devCode?: string;
+    email: string;
     resendAfter?: string;
   }>();
 
@@ -70,8 +69,7 @@ export default function OtpScreen() {
   const resend = useMutation({
     mutationFn: () =>
       services.auth.requestOtp({
-        countryCode: params.phone.startsWith('+972') ? '+972' : '+970',
-        phone: params.phone.replace(/^\+\d{3}/, ''),
+        email: params.email,
       }),
     onSuccess: (challenge) => {
       haptics.light();
@@ -101,7 +99,7 @@ export default function OtpScreen() {
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t('onboarding.otpTitle')}</AppText>
         <AppText variant="bodyLg" color="textSecondary">
-          {t('onboarding.otpSubtitle', { phone: params.phone })}
+          {t('onboarding.otpSubtitle', { email: params.email })}
         </AppText>
       </Reveal>
 
@@ -111,7 +109,7 @@ export default function OtpScreen() {
           onChangeText={setCode}
           length={CODE_LENGTH}
           hasError={verify.isError}
-          disabled={verify.isPending}
+          disabled={verify.isPending || resend.isPending}
           onComplete={handleComplete}
           testID="otp-input"
         />
@@ -120,12 +118,7 @@ export default function OtpScreen() {
           <InlineNotice tone="danger" title={t('onboarding.otpInvalid')} body={errorMessage(verify.error)} />
         ) : null}
 
-        {params.devCode ? (
-          <InlineNotice
-            tone="info"
-            title={t('onboarding.otpDevHint', { code: params.devCode })}
-          />
-        ) : null}
+        {resend.isError ? <InlineNotice tone="danger" title={t('common.somethingWrong')} body={errorMessage(resend.error)} /> : null}
 
         <View style={{ alignItems: 'center', gap: spacing.md }}>
           {secondsLeft > 0 ? (
@@ -133,7 +126,7 @@ export default function OtpScreen() {
               {t('onboarding.otpResendIn', { seconds: secondsLeft })}
             </AppText>
           ) : (
-            <PressableScale onPress={() => resend.mutate()} haptic="light" hitSlop={10}>
+            <PressableScale disabled={resend.isPending || verify.isPending} onPress={() => resend.mutate()} haptic="light" hitSlop={10}>
               <AppText variant="label" color="brand">
                 {resend.isPending ? t('common.loading') : t('onboarding.otpResend')}
               </AppText>
@@ -142,7 +135,7 @@ export default function OtpScreen() {
 
           <PressableScale onPress={() => router.back()} haptic="light" hitSlop={10}>
             <AppText variant="bodySm" color="textSecondary">
-              {t('onboarding.otpChangeNumber')}
+              {t('onboarding.otpChangeEmail')}
             </AppText>
           </PressableScale>
         </View>

@@ -103,7 +103,7 @@ export default function ProfileScreen() {
               {user?.fullName}
             </AppText>
             <AppText variant="body" color="textSecondary" numeric align="center">
-              {user?.phone}
+              {user?.email}
             </AppText>
           </View>
           {user?.createdAt ? (

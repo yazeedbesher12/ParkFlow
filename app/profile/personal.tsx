@@ -31,10 +31,9 @@ export default function PersonalInfoScreen() {
   const setUser = useAuthStore((s) => s.setUser);
 
   const [fullName, setFullName] = useState(user?.fullName ?? '');
-  const [email, setEmail] = useState(user?.email ?? '');
 
   const save = useMutation({
-    mutationFn: () => services.profile.update(user!.id, { fullName, email }),
+    mutationFn: () => services.profile.update(user!.id, { fullName }),
     onSuccess: (updated) => {
       haptics.success();
       setUser(updated);
@@ -44,8 +43,7 @@ export default function PersonalInfoScreen() {
   });
 
   const nameValid = fullName.trim().length >= 2;
-  const emailValid = email.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const dirty = fullName !== (user?.fullName ?? '') || email !== (user?.email ?? '');
+  const dirty = fullName !== (user?.fullName ?? '');
 
   return (
     <Screen keyboardAvoiding>
@@ -66,21 +64,10 @@ export default function PersonalInfoScreen() {
             error={fullName.length > 0 && !nameValid ? t('onboarding.nameInvalid') : undefined}
           />
 
-          <TextField
-            label={`${t('profile.email')} · ${t('common.optional')}`}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            error={!emailValid ? t('common.required') : undefined}
-          />
+          <DetailRow label={t('profile.email')} value={user?.email ?? undefined} />
         </Card>
 
         <Card padding="lg" style={{ gap: spacing.md }}>
-          {/* The phone number is the account identity and is changed by
-              re-verifying, not by editing a field here. */}
-          <DetailRow label={t('profile.phone')} value={user?.phone} />
           <Divider />
           <DetailRow
             label={t('profile.memberSince')}
@@ -98,7 +85,7 @@ export default function PersonalInfoScreen() {
 
         <AppButton
           label={t('common.save')}
-          disabled={!dirty || !nameValid || !emailValid}
+          disabled={!dirty || !nameValid}
           loading={save.isPending}
           onPress={() => save.mutate()}
         />

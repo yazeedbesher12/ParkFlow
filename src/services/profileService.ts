@@ -19,7 +19,6 @@ export const mockProfileService: ProfileService = {
       const user = db.users.find((u) => u.id === userId);
       if (!user) throw new AppError('not_found', 'User not found');
       if (input.fullName !== undefined) user.fullName = input.fullName.trim();
-      if (input.email !== undefined) user.email = input.email.trim() || undefined;
       if (input.locale !== undefined) user.locale = input.locale;
       user.updatedAt = nowIso();
       return { ...user };

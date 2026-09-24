@@ -40,7 +40,6 @@ export interface MockDatabase {
   zoneReports: ZoneReport[];
   pointsLedger: PointsEntry[];
   notifications: AppNotification[];
-  otp: { challengeId: string; phone: string; code: string; expiresAt: string }[];
 }
 
 const emptyDb = (): MockDatabase => ({
@@ -59,7 +58,6 @@ const emptyDb = (): MockDatabase => ({
   zoneReports: [],
   pointsLedger: [],
   notifications: [],
-  otp: [],
 });
 
 let db: MockDatabase | null = null;

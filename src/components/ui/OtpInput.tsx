@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -26,7 +26,7 @@ export interface OtpInputProps {
 }
 
 /**
- * One hidden TextInput drives visible boxes. That keeps SMS autofill, paste and
+ * One hidden TextInput drives visible boxes. That keeps one-time-code autofill, paste and
  * hardware keyboards working exactly as the platform expects — six separate
  * inputs break all three.
  */
@@ -121,7 +121,7 @@ export function OtpInput({
         editable={!disabled}
         keyboardType="number-pad"
         textContentType="oneTimeCode"
-        autoComplete={Platform.OS === 'android' ? 'sms-otp' : 'one-time-code'}
+        autoComplete="one-time-code"
         maxLength={length}
         accessibilityLabel="Verification code"
         // Invisible but still hit-testable, so a tap focuses it directly.

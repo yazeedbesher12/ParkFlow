@@ -74,6 +74,7 @@ export type TrustTier = 'bronze' | 'silver' | 'gold' | 'platinum';
 
 export type TrustFactorKey =
   | 'verified_phone'
+  | 'verified_email'
   | 'vehicle'
   | 'paid_sessions'
   | 'reports'

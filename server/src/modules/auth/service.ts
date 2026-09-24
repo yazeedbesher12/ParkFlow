@@ -4,23 +4,23 @@ import type { User } from '@prisma/client';
 import { env } from '../../config/env';
 import { redis } from '../../database/redis';
 import { db,atomic,lock,type Tx } from '../../database/client';
-import { sms } from '../../providers/sms';
+import { emailProvider } from '../../providers/email';
+import { z } from 'zod';
 import { assert,ApiError,requireValue } from '../../utils/errors';
 export const digest=(v:string)=>createHmac('sha256',env.JWT_REFRESH_SECRET).update(v).digest('hex');
-export function normalizePhone(countryCode:string,phone:string){
- const digits=(countryCode+phone).replace(/[?-?]/g,c=>String(c.charCodeAt(0)-1632)).replace(/[^0-9]/g,'');
- let national=phone.replace(/[^0-9]/g,'').replace(/^0/,'');
- if(phone.startsWith('+')) {assert(/^\+(970|972)5\d{8}$/.test(phone),'VALIDATION','Invalid phone number');return phone;}
- assert(['+970','+972'].includes(countryCode)&&/^5\d{8}$/.test(national),'VALIDATION','Use a valid Palestinian mobile number');
- return countryCode+national;
-}
-export async function requestOtp(input:{countryCode:string;phone:string}){
- const phone=normalizePhone(input.countryCode,input.phone);
- assert(await redis.set(`otp:cooldown:${phone}`,'1','EX',60,'NX'),'OTP_COOLDOWN','Please wait before requesting another code',429);
+export const normalizeEmail=(value:string)=>z.email().max(254).parse(value.trim().toLowerCase());
+export async function requestOtp(input:{email:string}){
+ const email=normalizeEmail(input.email);
+ const cooldown=`otp:email:cooldown:${email}`;
+ assert(await redis.set(cooldown,'1','EX',60,'NX'),'OTP_COOLDOWN','Please wait before requesting another code',429);
  const challengeId=randomUUID(),code=String(randomInt(100000,1000000));
- await redis.hset(`otp:${challengeId}`,{phone,hash:digest(challengeId+code),tries:'0'});await redis.expire(`otp:${challengeId}`,300);
- try {await sms.sendOtp(phone,code);}catch(e){await redis.del(`otp:${challengeId}`,`otp:cooldown:${phone}`);throw e;}
- return {challengeId,phone,resendAfterSeconds:60,expiresAt:new Date(Date.now()+300000).toISOString(),...(env.SMS_PROVIDER==='development'&&env.NODE_ENV!=='production'?{devCode:code}:{})};
+ const key=`otp:email:${challengeId}`;
+ await redis.multi().hset(key,{email,hash:digest(challengeId+code),tries:'0'}).expire(key,300).exec();
+ try {await emailProvider.sendOtp(email,code);}catch {
+  await redis.del(key,cooldown);
+  throw new ApiError(503,'EMAIL_DELIVERY_FAILED','Unable to send the verification email. Please try again.');
+ }
+ return {challengeId,email,resendAfterSeconds:60,expiresAt:new Date(Date.now()+300000).toISOString()};
 }
 async function issue(tx:Tx,user:User,meta:{device?:string;ip?:string},familyId:string=randomUUID()){
  const id=randomUUID(),expiresAt=new Date(Date.now()+env.REFRESH_TOKEN_TTL*1000);
@@ -35,12 +35,14 @@ export async function verifyOtp(input:{challengeId:string;code:string},meta:{dev
  local tries=tonumber(redis.call('HGET',KEYS[1],'tries') or '0')
  if tries>=5 then return 'locked' end
  if h~=ARGV[1] then redis.call('HINCRBY',KEYS[1],'tries',1);return 'invalid' end
- local phone=redis.call('HGET',KEYS[1],'phone');redis.call('DEL',KEYS[1]);return phone
- `,1,`otp:${input.challengeId}`,digest(input.challengeId+input.code)));
- assert(result.startsWith('+'),'OTP_'+result.toUpperCase(),'The code is invalid, expired, or has reached its retry limit',401);
+ local email=redis.call('HGET',KEYS[1],'email');redis.call('DEL',KEYS[1]);return email
+ `,1,`otp:email:${input.challengeId}`,digest(input.challengeId+input.code)));
+ assert(result.includes('@'),'OTP_'+result.toUpperCase(),'The code is invalid, expired, or has reached its retry limit',401);
  return atomic(async tx=>{
- const existing=await tx.user.findUnique({where:{phone:result}});
- const user=existing?await tx.user.update({where:{id:existing.id},data:{lastLoginAt:new Date(),phoneVerifiedAt:new Date()}}):await tx.user.create({data:{phone:result,countryCode:result.slice(0,4),phoneVerifiedAt:new Date(),lastLoginAt:new Date(),wallet:{create:{}}}});
+ await lock(tx,`email:${result}`);
+ const existing=await tx.user.findUnique({where:{email:result}});
+ assert(!existing || existing.emailVerifiedAt,'EMAIL_MIGRATION_REQUIRED','Contact support to link your existing account to a verified email',409);
+ const user=existing?await tx.user.update({where:{id:existing.id},data:{lastLoginAt:new Date(),emailVerifiedAt:new Date()}}):await tx.user.create({data:{email:result,emailVerifiedAt:new Date(),lastLoginAt:new Date(),wallet:{create:{}}}});
  assert(user.status==='ACTIVE','ACCOUNT_SUSPENDED','This account is suspended',403);
  return {session:await issue(tx,user,meta),user,isNewUser:!user.fullName};
  });

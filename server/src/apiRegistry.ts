@@ -1,3 +1,4 @@
+import type * as admin from './modules/admin/service';
 import { Router,type Request,type RequestHandler } from 'express';
 import { z } from 'zod';
 import type { Role } from '@prisma/client';

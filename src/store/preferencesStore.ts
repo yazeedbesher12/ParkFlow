@@ -12,7 +12,7 @@ interface PreferencesState {
   /** Which of the user's vehicles the map / start-parking flow is aimed at. */
   selectedVehicleId?: string;
   notifications: NotificationPreferences;
-  /** True once the first-run flow (phone -> name -> vehicle) has finished. */
+  /** True once the first-run flow (email -> name -> vehicle) has finished. */
   onboardingComplete: boolean;
   /** True once persisted preferences have been read — describes this run only. */
   hydrated: boolean;

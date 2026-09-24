@@ -25,18 +25,11 @@ Typecheck:
 npm run typecheck
 ```
 
-### Demo walkthrough
+### Email sign-in
 
-The mock backend seeds a believable account as you go, so the whole product is
-demoable from a cold start:
-
-1. **Get Started → phone** — any valid Palestinian mobile (e.g. `59 912 3456`).
-2. **OTP** — the code is `123456`, shown on screen.
-3. **Name → first vehicle** — the plate you type becomes the plate the seeded
-   violations are issued against.
-4. **Map** — tap a zone, confirm the vehicle, start parking.
-5. **Reload the browser / kill the app** — the running session comes back with
-   the correct elapsed time.
+Follow [Email OTP setup](EMAIL_OTP.md) to configure Gmail SMTP and the backend.
+Enter your email, request a six-digit code, and use the code received in your inbox.
+New accounts continue to name and vehicle setup. There is no demo login or on-screen code.
 
 ## Architecture
 
@@ -100,7 +93,7 @@ when a real backend arrives.
 - **The receipt** is notched and perforated so it reads as a ticket rather than
   a panel.
 - **Onboarding steps after the account exists** (name, first vehicle) swallow the
-  Android back button — reversing into the phone or OTP screen of an
+  Android back button — reversing into the email or OTP screen of an
   already-verified account is a dead end. "Skip for now" is the way out.
 
 ## Localisation and RTL

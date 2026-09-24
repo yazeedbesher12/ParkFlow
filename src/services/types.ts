@@ -39,7 +39,7 @@ import type {
  */
 
 export interface AuthService {
-  requestOtp(input: { countryCode: string; phone: string }): Promise<OtpChallenge>;
+  requestOtp(input: { email: string }): Promise<OtpChallenge>;
   verifyOtp(input: {
     challengeId: string;
     code: string;
@@ -188,7 +188,7 @@ export interface NotificationService {
 
 export interface ProfileService {
   get(userId: string): Promise<User>;
-  update(userId: string, input: Partial<Pick<User, 'fullName' | 'email' | 'locale'>>): Promise<User>;
+  update(userId: string, input: Partial<Pick<User, 'fullName' | 'locale'>>): Promise<User>;
   getNotificationPreferences(userId: string): Promise<NotificationPreferences>;
 }
 

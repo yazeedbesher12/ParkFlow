@@ -4,7 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MapPin, Wallet, BellRing } from 'lucide-react-native';
-import { useMutation } from '@tanstack/react-query';
 
 import { AppButton, AppText, Reveal } from '@/components/ui';
 import { LogoMark } from '@/components/brand/Logo';
@@ -12,15 +11,6 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
-import { services } from '@/services';
-import { useAuthStore } from '@/store/authStore';
-import { usePreferencesStore } from '@/store/preferencesStore';
-import { haptics } from '@/utils/haptics';
-
-/** Fixed demo account used by the one-tap login button. */
-const DEMO_PHONE = { countryCode: '+970', phone: '599123456' };
-const DEMO_NAME = 'Demo Driver';
-const DEMO_VEHICLE = { plateNumber: '1234567', type: 'private', make: 'Kia', model: 'Picanto' } as const;
 
 export default function WelcomeScreen() {
   const router = useRouter();
@@ -35,36 +25,7 @@ export default function WelcomeScreen() {
     { Icon: BellRing, label: t('onboarding.feature3') },
   ];
 
-  const goToPhone = () => router.push('/(onboarding)/phone');
-
-  const signIn = useAuthStore((s) => s.signIn);
-  const completeOnboarding = usePreferencesStore((s) => s.completeOnboarding);
-
-  // Runs the same phone → OTP → name → vehicle flow against the mock backend,
-  // skipping the screens, so the app can be opened signed in with one tap.
-  const demoLogin = useMutation({
-    mutationFn: async () => {
-      const challenge = await services.auth.requestOtp(DEMO_PHONE);
-      if (!challenge.devCode) throw new Error('Quick login requires the development SMS adapter. Use phone login.');
-      const { session, user } = await services.auth.verifyOtp({
-        challengeId: challenge.challengeId,
-        code: challenge.devCode!,
-      });
-      const profile = user.fullName
-        ? user
-        : await services.auth.completeProfile({ userId: user.id, fullName: DEMO_NAME });
-      const vehicles = await services.vehicles.list(user.id);
-      if (!vehicles.length) await services.vehicles.create(user.id, DEMO_VEHICLE);
-      return { session, user: profile };
-    },
-    onSuccess: async ({ session, user }) => {
-      haptics.success();
-      await signIn(session, user);
-      completeOnboarding();
-      router.replace('/(tabs)/map');
-    },
-    onError: () => haptics.error(),
-  });
+  const goToEmail = () => router.push('/(onboarding)/email');
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -164,24 +125,17 @@ export default function WelcomeScreen() {
           <Reveal delay={420} style={{ gap: spacing.md }}>
             <AppButton
               label={t('onboarding.getStarted')}
-              onPress={goToPhone}
+              onPress={goToEmail}
               variant="primary"
               testID="welcome-get-started"
             />
             <AppButton
               label={t('onboarding.login')}
-              onPress={goToPhone}
+              onPress={goToEmail}
               variant="ghost"
               style={{ height: 48 }}
             />
-            {__DEV__ && process.env.EXPO_PUBLIC_ENABLE_DEMO_LOGIN === 'true' ? <AppButton
-              label={t('onboarding.demoLogin')}
-              onPress={() => demoLogin.mutate()}
-              loading={demoLogin.isPending}
-              variant="ghost"
-              style={{ height: 48 }}
-              testID="welcome-demo-login"
-            /> : null}
+
           </Reveal>
         </View>
       </LinearGradient>

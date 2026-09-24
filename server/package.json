@@ -37,7 +37,8 @@
     "rate-limit-redis": "^4.2.3",
     "dotenv": "^17.2.0",
     "swagger-ui-express": "^5.0.1",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "nodemailer": "^10.0.10"
   },
   "devDependencies": {
     "prisma": "6.19.2",
@@ -52,7 +53,8 @@
     "@types/cors": "^2.8.19",
     "@types/supertest": "^6.0.3",
     "@types/swagger-ui-express": "^4.1.8",
-    "@types/multer": "^2.0.0"
+    "@types/multer": "^2.0.0",
+    "@types/nodemailer": "^8.0.2"
   },
   "overrides": {
     "effect": "^3.22.2",

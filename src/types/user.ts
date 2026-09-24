@@ -3,9 +3,9 @@ import type { ID, ISODateString } from './common';
 export interface User {
   id: ID;
   fullName: string;
-  phone: string;
-  countryCode: string;
-  email?: string;
+  phone?: string | null;
+  countryCode?: string | null;
+  email?: string | null;
   avatarUrl?: string;
   /** Not collected during basic onboarding — reserved for permits/appeals. */
   nationalId?: string;
@@ -23,10 +23,8 @@ export interface AuthSession {
 
 export interface OtpChallenge {
   challengeId: ID;
-  phone: string;
+  email: string;
   /** Seconds until the user may request a new code. */
   resendAfterSeconds: number;
   expiresAt: ISODateString;
-  /** Dev-only convenience so the mock backend is demoable. */
-  devCode?: string;
 }

@@ -12,6 +12,6 @@ export async function seed(){
  // No fabricated occupancy reports, balances, users, or violations are seeded.
  }
  for(const c of catalog.checkpoints){const {location,...rest}=c;await db.roadCheckpoint.upsert({where:{id:c.id},create:{...rest,...location},update:{}});}
- if(process.env.SEED_ADMIN_PHONE&&process.env.NODE_ENV!=='production')await db.user.upsert({where:{phone:process.env.SEED_ADMIN_PHONE},create:{phone:process.env.SEED_ADMIN_PHONE,countryCode:process.env.SEED_ADMIN_PHONE.slice(0,4),fullName:'Development Admin',role:'ADMIN',wallet:{create:{}}},update:{}});
+ if(process.env.SEED_ADMIN_EMAIL&&process.env.NODE_ENV!=='production'){const email=process.env.SEED_ADMIN_EMAIL.trim().toLowerCase();await db.user.upsert({where:{email},create:{email,emailVerifiedAt:new Date(),fullName:'Development Admin',role:'ADMIN',wallet:{create:{}}},update:{}});}
 }
 if(require.main===module)seed().then(()=>console.log('Seeded parking catalog and checkpoints')).finally(()=>db.$disconnect());

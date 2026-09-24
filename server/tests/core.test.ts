@@ -18,16 +18,19 @@ import { routingService } from '../src/modules/routing/service';
 import { validateFile } from '../src/providers/storage';
 import { notify } from '../src/modules/notifications/service';
 import { post } from '../src/modules/wallet/ledger';
+import { emailProvider } from '../src/providers/email';
 const app=createApp();
+const sentCode=()=>vi.mocked(emailProvider.sendOtp).mock.calls.at(-1)![1];
 const key=()=>randomUUID();
 let driver:Awaited<ReturnType<typeof auth.verifyOtp>>,other:Awaited<ReturnType<typeof auth.verifyOtp>>;
 let vehicleId:string;
-async function login(phone:string){const c=await auth.requestOtp({countryCode:'+970',phone});return auth.verifyOtp({challengeId:c.challengeId,code:c.devCode!},{});}
+async function login(phone:string){const c=await auth.requestOtp({email:`${phone}@example.com`});return auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{});}
 async function credit(userId:string,amount=10000){return atomic(tx=>post(tx,userId,{amount,type:'adjustment',title:'Test credit',titleAr:'???? ??????'}));}
 const startInput=()=>({vehicleId,zoneId:'test-zone',mode:'start_stop' as const,entryMethod:'manual'});
 async function backdate(id:string,minutes=65){await db.parkingSession.update({where:{id},data:{startedAt:new Date(Date.now()-minutes*60000)}});}
 beforeEach(async()=>{
  vi.restoreAllMocks();vi.unstubAllGlobals();
+ vi.spyOn(emailProvider,'sendOtp').mockResolvedValue();
  const tables=await db.$queryRaw<{tablename:string}[]>`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> '_prisma_migrations'`;
  await db.$executeRawUnsafe('TRUNCATE '+tables.map(t=>'"'+t.tablename.replace(/"/g,'""')+'"').join(',')+' CASCADE');
  await redis.flushdb();
@@ -37,10 +40,37 @@ beforeEach(async()=>{
  driver=await login('599111111');other=await login('599222222');vehicleId=(await vehicles.create(driver.user.id,{plateNumber:'1234567',type:'private'})).id;
 });
 describe('authentication and authorization',()=>{
- it('normalizes phones and stores only OTP hashes',async()=>{const c=await auth.requestOtp({countryCode:'+970',phone:'0599333333'});expect(c.phone).toBe('+970599333333');const state=await redis.hgetall('otp:'+c.challengeId);expect(JSON.stringify(state)).not.toContain(c.devCode);expect(state.hash).toHaveLength(64);});
- it('expires OTP and enforces one-time use',async()=>{const c=await auth.requestOtp({countryCode:'+970',phone:'599333333'});await redis.del('otp:'+c.challengeId);await expect(auth.verifyOtp({challengeId:c.challengeId,code:c.devCode!},{})).rejects.toMatchObject({code:'OTP_EXPIRED'});await expect(auth.verifyOtp({challengeId:c.challengeId,code:c.devCode!},{})).rejects.toBeDefined();});
- it('locks after five incorrect OTP attempts',async()=>{const c=await auth.requestOtp({countryCode:'+970',phone:'599333333'});for(let i=0;i<5;i++)await expect(auth.verifyOtp({challengeId:c.challengeId,code:'000000'},{})).rejects.toBeDefined();await expect(auth.verifyOtp({challengeId:c.challengeId,code:c.devCode!},{})).rejects.toMatchObject({code:'OTP_LOCKED'});});
- it('enforces resend cooldown',async()=>{await auth.requestOtp({countryCode:'+970',phone:'599333333'});await expect(auth.requestOtp({countryCode:'+970',phone:'599333333'})).rejects.toMatchObject({status:429});});
+ it('normalizes emails and stores only OTP hashes',async()=>{const c=await auth.requestOtp({email:' Person@Example.COM '});expect(c.email).toBe('person@example.com');expect(c).not.toHaveProperty('devCode');expect(sentCode()).toMatch(/^\d{6}$/);const state=await redis.hgetall('otp:email:'+c.challengeId);expect(JSON.stringify(state)).not.toContain(sentCode());expect(state.hash).toHaveLength(64);});
+ it('expires OTP and enforces one-time use',async()=>{const c=await auth.requestOtp({email:'person@example.com'});await redis.del('otp:email:'+c.challengeId);await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'OTP_EXPIRED'});await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toBeDefined();});
+ it('locks after five incorrect OTP attempts',async()=>{const c=await auth.requestOtp({email:'person@example.com'});for(let i=0;i<5;i++)await expect(auth.verifyOtp({challengeId:c.challengeId,code:'000000'},{})).rejects.toBeDefined();await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'OTP_LOCKED'});});
+ it('enforces resend cooldown',async()=>{await auth.requestOtp({email:'person@example.com'});await expect(auth.requestOtp({email:'person@example.com'})).rejects.toMatchObject({status:429});});
+ it('registers with email, logs in to the same account and consumes OTP once',async()=>{
+ const c=await auth.requestOtp({email:'new@example.com'}),code=sentCode();
+ const first=await auth.verifyOtp({challengeId:c.challengeId,code},{});
+ expect(first.user.email).toBe('new@example.com');expect(first.user.phone).toBeNull();expect(first.user.emailVerifiedAt).toBeTruthy();
+ await expect(auth.verifyOtp({challengeId:c.challengeId,code},{})).rejects.toMatchObject({code:'OTP_EXPIRED'});
+ await redis.del('otp:email:cooldown:new@example.com');
+ const next=await auth.requestOtp({email:'NEW@EXAMPLE.COM'});
+ const again=await auth.verifyOtp({challengeId:next.challengeId,code:sentCode()},{});
+ expect(again.user.id).toBe(first.user.id);
+ await expect(auth.authenticate(again.session.accessToken)).resolves.toMatchObject({userId:first.user.id});
+ });
+ it('rejects invalid email and old phone requests',async()=>{
+ for(const body of [{email:'invalid'},{countryCode:'+970',phone:'599333333'}])expect((await request(app).post('/api/v1/auth/request-otp').send(body)).status).toBe(400);
+ });
+ it('cleans up failed delivery so the user can retry',async()=>{
+ vi.mocked(emailProvider.sendOtp).mockRejectedValueOnce(new Error('SMTP failure'));
+ await expect(auth.requestOtp({email:'retry@example.com'})).rejects.toMatchObject({code:'EMAIL_DELIVERY_FAILED'});
+ expect(await redis.exists('otp:email:cooldown:retry@example.com')).toBe(0);
+ expect(await redis.keys('otp:email:*')).toEqual(expect.not.arrayContaining([expect.stringContaining('retry@example.com')]));
+ await expect(auth.requestOtp({email:'retry@example.com'})).resolves.toHaveProperty('challengeId');
+ });
+ it('prevents unverified legacy email takeover and profile identity changes',async()=>{
+ await db.user.create({data:{email:'legacy@example.com',phone:'+970599888888',countryCode:'+970'}});
+ const c=await auth.requestOtp({email:'legacy@example.com'});
+ await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'EMAIL_MIGRATION_REQUIRED'});
+ expect((await request(app).patch('/api/v1/users/me').auth(driver.session.accessToken,{type:'bearer'}).send({email:'changed@example.com'})).status).toBe(400);
+ });
  it('rotates refresh tokens and revokes the family on replay',async()=>{const next=await auth.refresh(driver.session.refreshToken,{});expect(next.refreshToken).not.toBe(driver.session.refreshToken);await expect(auth.authenticate(next.accessToken)).resolves.toMatchObject({userId:driver.user.id});await expect(auth.refresh(driver.session.refreshToken,{})).rejects.toMatchObject({status:401});await expect(auth.refresh(next.refreshToken,{})).rejects.toMatchObject({status:401});expect(await db.refreshToken.findFirst({where:{tokenHash:driver.session.refreshToken}})).toBeNull();});
  it('requires JWT and blocks non-admin access',async()=>{expect((await request(app).get('/api/v1/wallet')).status).toBe(401);expect((await request(app).get('/api/v1/admin/users').auth(driver.session.accessToken,{type:'bearer'})).status).toBe(403);});
  it('invalidates logout sessions immediately',async()=>{const a=await auth.authenticate(driver.session.accessToken);await auth.logout(a.userId,a.sid);await expect(auth.authenticate(driver.session.accessToken)).rejects.toMatchObject({status:401});});
