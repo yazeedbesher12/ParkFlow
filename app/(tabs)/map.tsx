@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
 import { MapSurface } from '@/components/map/MapSurface';
-import type { MapCheckpoint, MapLandmark, MapRoute, MapSurfaceHandle } from '@/components/map/types';
+import type { MapCheckpoint, MapRoute, MapSurfaceHandle } from '@/components/map/types';
 import { MapTopBar } from '@/components/map/MapTopBar';
 import { MapControlRail } from '@/components/map/MapControlRail';
 import { NearbyParkingPanel } from '@/components/map/NearbyParkingPanel';
@@ -27,17 +27,16 @@ import { useActiveSessions, useZones } from '@/hooks/useParking';
 import { useCheckpoints, useRoute } from '@/hooks/useCommunity';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useUserLocation } from '@/hooks/useUserLocation';
-import { DEFAULT_REGION, LANDMARKS, RAMALLAH_CENTER } from '@/services';
+import { DEFAULT_REGION, RAMALLAH_CENTER } from '@/services';
 import type { GeoPoint, GeoRegion, ParkingZone, RamallahParkingLocation } from '@/types';
 import { distanceMeters } from '@/utils/geo';
-import { findLandmark } from '@/utils/landmarkSearch';
 import { haptics } from '@/utils/haptics';
 import { ramallahParkingLocations } from '@/data/ramallahParking';
 
 /** Clears the custom floating tab bar, including the native bottom safe area. */
 const TAB_BAR_CLEARANCE = 72;
-/** The control rail starts just below the compact vehicle/search cluster. */
-const CONTROL_RAIL_TOP = 116;
+/** The control rail starts just below the compact vehicle row. */
+const CONTROL_RAIL_TOP = 64;
 
 const FASTEST_PARKING_ROUTE = {
   mode: 'fastest',
@@ -55,7 +54,6 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
 
   const mapRef = useRef<MapSurfaceHandle>(null);
-  const [search, setSearch] = useState('');
   const [region, setRegion] = useState<GeoRegion>(DEFAULT_REGION);
   const [selectedZone, setSelectedZone] = useState<ParkingZone>();
   const [routeZone, setRouteZone] = useState<ParkingZone>();
@@ -71,14 +69,8 @@ export default function MapScreen() {
   const [routeDetailsExpanded, setRouteDetailsExpanded] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string>();
 
-  const trimmedSearch = search.trim();
-  const landmark = useMemo(
-    () => (trimmedSearch.length >= 3 ? findLandmark(trimmedSearch, LANDMARKS)?.landmark : undefined),
-    [trimmedSearch],
-  );
-
   const { vehicles, selected, select } = useSelectedVehicle();
-  const { data: zones = [] } = useZones(landmark ? undefined : trimmedSearch || undefined);
+  const { data: zones = [] } = useZones();
   const { data: activeSessions = [] } = useActiveSessions();
   const { data: checkpoints = [] } = useCheckpoints();
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
@@ -94,10 +86,9 @@ export default function MapScreen() {
 
   const nearbyOrigin = useMemo<GeoPoint>(
     () =>
-      landmark?.location ??
       testLocation ??
       location ?? { latitude: region.latitude, longitude: region.longitude },
-    [landmark, testLocation, location, region.latitude, region.longitude],
+    [testLocation, location, region.latitude, region.longitude],
   );
   const nearbyZones = useMemo<NearbyZone[]>(
     () =>
@@ -129,14 +120,6 @@ export default function MapScreen() {
         assumed: checkpoint.assumed,
       })),
     [alerts, locale],
-  );
-
-  const mapLandmark = useMemo<MapLandmark | undefined>(
-    () =>
-      landmark
-        ? { name: locale === 'ar' ? landmark.nameAr : landmark.nameEn, location: landmark.location }
-        : undefined,
-    [landmark, locale],
   );
 
   const routeOrigin = useMemo<GeoPoint | undefined>(
@@ -174,13 +157,6 @@ export default function MapScreen() {
       500,
     );
   }, [mapRoute]);
-
-  useEffect(() => {
-    if (!landmark) return;
-    const next: GeoRegion = { ...landmark.location, latitudeDelta: 0.012, longitudeDelta: 0.012 };
-    setRegion(next);
-    mapRef.current?.animateToRegion(next, 400);
-  }, [landmark]);
 
   useEffect(() => {
     if (!locationMessage) return;
@@ -349,7 +325,6 @@ export default function MapScreen() {
         checkpoints={mapCheckpoints}
         onSelectCheckpoint={() => router.push('/roads')}
         route={mapRoute}
-        landmark={mapLandmark}
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
       />
 
@@ -363,15 +338,6 @@ export default function MapScreen() {
         <MapTopBar
           vehicle={selected}
           unreadCount={unreadCount}
-          search={search}
-          onSearchChange={(value) => {
-            setSearch(value);
-            setEntryMenuOpen(false);
-            setRouteZone(undefined);
-            setRouteParkingLocation(undefined);
-            setSelectedParkingLocation(undefined);
-            setRouteDetailsExpanded(false);
-          }}
           onOpenVehicles={() => setVehicleSheetOpen(true)}
           onOpenNotifications={() => router.push('/notifications')}
         />

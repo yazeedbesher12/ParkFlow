@@ -1,7 +1,7 @@
 import { Bell, Car, ChevronDown } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { AppText, IconButton, PressableScale, SearchField } from '@/components/ui';
+import { AppText, IconButton, PressableScale } from '@/components/ui';
 import { PlateBadge } from '@/components/domain/PlateBadge';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -13,8 +13,6 @@ import type { UserVehicleView } from '@/types';
 interface MapTopBarProps {
   vehicle?: UserVehicleView;
   unreadCount: number;
-  search: string;
-  onSearchChange: (value: string) => void;
   onOpenVehicles: () => void;
   onOpenNotifications: () => void;
 }
@@ -22,8 +20,6 @@ interface MapTopBarProps {
 export function MapTopBar({
   vehicle,
   unreadCount,
-  search,
-  onSearchChange,
   onOpenVehicles,
   onOpenNotifications,
 }: MapTopBarProps) {
@@ -39,7 +35,7 @@ export function MapTopBar({
     : t('vehicle.select');
 
   return (
-    <View style={{ gap: spacing.xs }} pointerEvents="box-none">
+    <View pointerEvents="box-none">
       <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
         <PressableScale
           onPress={onOpenVehicles}
@@ -127,13 +123,6 @@ export function MapTopBar({
         </View>
       </View>
 
-      <SearchField
-        value={search}
-        onChangeText={onSearchChange}
-        placeholder={t('map.search')}
-        style={[{ height: 44, borderRadius: radius.xl }, shadow.sm]}
-        testID="map-search"
-      />
     </View>
   );
 }
