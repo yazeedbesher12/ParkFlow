@@ -38,7 +38,8 @@ export const queryKeys = {
 
   checkpoints: () => ['roads', 'checkpoints'] as const,
   roadFeed: () => ['roads', 'feed'] as const,
-  route: (from?: GeoPoint, to?: GeoPoint) => ['route', pointKey(from), pointKey(to)] as const,
+  route: (from?: GeoPoint, to?: GeoPoint, mode = 'checkpoint-aware') =>
+    ['route', pointKey(from), pointKey(to), mode] as const,
   trust: (userId: string) => ['trust', userId] as const,
 } as const;
 

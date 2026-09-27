@@ -55,10 +55,18 @@ export function useReportZone() {
   });
 }
 
-export function useRoute(from?: GeoPoint, to?: GeoPoint) {
+export function useRoute(
+  from?: GeoPoint,
+  to?: GeoPoint,
+  options?: {
+    mode?: 'checkpoint-aware' | 'fastest';
+    snapDestination?: boolean;
+    maxAlternatives?: number;
+  },
+) {
   return useQuery({
-    queryKey: queryKeys.route(from, to),
-    queryFn: () => services.routing.getRoute(from!, to!),
+    queryKey: queryKeys.route(from, to, options?.mode),
+    queryFn: () => services.routing.getRoute(from!, to!, options),
     enabled: Boolean(from && to),
     staleTime: 60_000,
     retry: false,

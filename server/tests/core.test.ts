@@ -134,6 +134,25 @@ describe('reports, trust and routing',()=>{
  it('aggregates parking availability on the backend',async()=>{await roads.reportZone(driver.user.id,'test-zone','full');const response=await request(app).get('/api/v1/parking/zones/test-zone').auth(driver.session.accessToken,{type:'bearer'});expect(response.body.availability).toBe('full');expect(response.body.crowd.reportCount).toBe(1);});
  it('calculates trust tiers, caps paid sessions and deducts unpaid fines',()=>{expect(trustScore({phone:true,vehicles:1,paid:3,reports:0,reportPoints:0,unpaid:0}).discountPercent).toBe(5);expect(trustScore({phone:true,vehicles:1,paid:100,reports:0,reportPoints:0,unpaid:0}).score).toBe(370);expect(trustScore({phone:true,vehicles:1,paid:0,reports:0,reportPoints:0,unpaid:3}).score).toBe(0);});
  it('ranks route alternatives with checkpoint penalties',async()=>{await roads.reportRoad(driver.user.id,'cp','closed');vi.stubGlobal('fetch',vi.fn().mockResolvedValue({json:async()=>({code:'Ok',routes:[{distance:1000,duration:100,geometry:{coordinates:[[35.19,31.9],[35.21,31.9]]}},{distance:2000,duration:200,geometry:{coordinates:[[35.19,32],[35.21,32]]}}]})}));const r=await routingService.getRoute({latitude:31.9,longitude:35.19},{latitude:31.9,longitude:35.21});expect(r.distanceMeters).toBe(2000);expect(r.rejected[0]?.blockedBy?.status).toBe('closed');});
+ it('snaps parking destinations and returns the fastest route with at most two alternatives',async()=>{
+  const fetchMock=vi.fn()
+   .mockResolvedValueOnce({json:async()=>({code:'Ok',waypoints:[{location:[35.206,31.906]}]})})
+   .mockResolvedValueOnce({json:async()=>({code:'Ok',routes:[
+    {distance:1800,duration:180,geometry:{coordinates:[[35.18,31.88],[35.206,31.906]]}},
+    {distance:1200,duration:90,geometry:{coordinates:[[35.18,31.88],[35.206,31.906]]}},
+    {distance:1400,duration:120,geometry:{coordinates:[[35.18,31.88],[35.206,31.906]]}},
+    {distance:1500,duration:140,geometry:{coordinates:[[35.18,31.88],[35.206,31.906]]}},
+   ]})});
+  vi.stubGlobal('fetch',fetchMock);
+  const r=await routingService.getRoute(
+   {latitude:31.88,longitude:35.18},
+   {latitude:31.9059,longitude:35.2041},
+   {mode:'fastest',snapDestination:true,maxAlternatives:2},
+  );
+  expect(r).toMatchObject({durationSeconds:90,distanceMeters:1200,source:'osrm',snappedDestination:{latitude:31.906,longitude:35.206}});
+  expect(r.rejected).toHaveLength(2);
+  expect(String(fetchMock.mock.calls[1]?.[0])).toContain('35.206,31.906');
+ });
  it('labels OSRM failure fallback as approximate',async()=>{vi.stubGlobal('fetch',vi.fn().mockRejectedValue(new Error('offline')));const r=await routingService.getRoute({latitude:31.8,longitude:35.19},{latitude:31.85,longitude:35.21});expect(r.source).toBe('straight-line');expect(r.coordinates).toHaveLength(2);});
  it('keeps the original billing increments, free minutes and cap',()=>{const rate={hourlyRate:600,incrementMinutes:15,freeMinutes:5,minimumCharge:100,dailyCap:1000};expect(computeCost(rate,300)).toBe(0);expect(computeCost(rate,301)).toBe(150);expect(computeCost(rate,100000)).toBe(1000);});
 });

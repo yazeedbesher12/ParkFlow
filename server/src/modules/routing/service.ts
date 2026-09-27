@@ -33,6 +33,17 @@ interface OsrmResponse {
   routes?: { distance: number; duration: number; geometry: { coordinates: [number, number][] } }[];
 }
 
+interface OsrmNearestResponse {
+  code?: string;
+  waypoints?: { location: [number, number] }[];
+}
+
+interface RouteOptions {
+  mode?: 'checkpoint-aware' | 'fastest';
+  snapDestination?: boolean;
+  maxAlternatives?: number;
+}
+
 /** Geometry is cached per origin/destination; scoring is redone on every call. */
 const cache = new Map<string, {routes:OsrmRoute[];expires:number}>();
 
@@ -70,6 +81,25 @@ async function fetchRoutes(from: GeoPoint, to: GeoPoint): Promise<OsrmRoute[]> {
   }
 }
 
+/** OSRM's driving profile returns the closest road point reachable by a car. */
+async function snapToDrivableRoad(point: GeoPoint): Promise<GeoPoint> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `${OSRM}/nearest/v1/driving/${point.longitude},${point.latitude}?number=1`,
+      { signal: controller.signal },
+    );
+    const json = (await response.json()) as OsrmNearestResponse;
+    const snapped = json.code === 'Ok' ? json.waypoints?.[0]?.location : undefined;
+    return snapped ? { latitude: snapped[1], longitude: snapped[0] } : point;
+  } catch {
+    return point;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function closuresNear(line: GeoPoint[], states: CheckpointState[]): RouteClosure[] {
   return states
     .filter((s) => s.status !== 'open' && distanceToPolyline(s.location, line) <= NEAR_METERS)
@@ -88,12 +118,16 @@ const worstOf = (closures: RouteClosure[]) =>
   closures.find((c) => c.status === 'closed') ?? closures[0];
 
 export const routingService = {
-  async getRoute(from:GeoPoint, to:GeoPoint) {
-    const [routes, states] = await Promise.all([fetchRoutes(from, to), checkpoints()]);
+  async getRoute(from: GeoPoint, to: GeoPoint, options: RouteOptions = {}) {
+    const destination = options.snapDestination ? await snapToDrivableRoad(to) : to;
+    const [routes, states] = await Promise.all([
+      fetchRoutes(from, destination),
+      options.mode === 'fastest' ? Promise.resolve([] as CheckpointState[]) : checkpoints(),
+    ]);
 
     if (!routes.length) {
-      const line = [from, to];
-      const distance = distanceMeters(from, to);
+      const line = [from, destination];
+      const distance = distanceMeters(from, destination);
       const closures = closuresNear(line, states);
       return {
         coordinates: line,
@@ -103,6 +137,7 @@ export const routingService = {
         closuresOnRoute: closures,
         rejected: [],
         source: 'straight-line',
+        snappedDestination: destination,
       };
     }
 
@@ -111,7 +146,11 @@ export const routingService = {
         const closures = closuresNear(route.coordinates, states);
         return { ...route, closures, penalty: penaltyOf(closures) };
       })
-      .sort((a, b) => a.duration + a.penalty - (b.duration + b.penalty));
+      .sort((a, b) =>
+        options.mode === 'fastest'
+          ? a.duration - b.duration
+          : a.duration + a.penalty - (b.duration + b.penalty),
+      );
 
     const best = scored[0]!;
     return {
@@ -120,11 +159,12 @@ export const routingService = {
       durationSeconds: Math.round(best.duration),
       penaltySeconds: best.penalty,
       closuresOnRoute: best.closures,
-      rejected: scored.slice(1).map((route) => ({
+      rejected: scored.slice(1, 1 + (options.maxAlternatives ?? scored.length)).map((route) => ({
         coordinates: route.coordinates,
         blockedBy: worstOf(route.closures),
       })),
       source: 'osrm',
+      snappedDestination: destination,
     };
   },
 };

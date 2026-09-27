@@ -1,5 +1,11 @@
 import type { StyleProp, ViewStyle } from 'react-native';
-import type { CheckpointStatus, GeoPoint, GeoRegion, ParkingZone } from '@/types';
+import type {
+  CheckpointStatus,
+  GeoPoint,
+  GeoRegion,
+  ParkingZone,
+  RamallahParkingLocation,
+} from '@/types';
 
 export interface MapCheckpoint {
   id: string;
@@ -31,7 +37,12 @@ export interface MapSurfaceProps {
   selectedZoneId?: string;
   onSelectZone: (zone: ParkingZone) => void;
   onPressBackground?: () => void;
+  onPressMap?: (coordinate: GeoPoint) => void;
   userLocation?: GeoPoint;
+  testLocation?: GeoPoint;
+  parkingLocations?: RamallahParkingLocation[];
+  selectedParkingLocationId?: string;
+  onSelectParkingLocation?: (location: RamallahParkingLocation) => void;
   /** Fired after the user finishes moving the map. */
   onRegionChangeComplete?: (region: GeoRegion) => void;
   checkpoints?: MapCheckpoint[];
@@ -44,4 +55,9 @@ export interface MapSurfaceProps {
 
 export interface MapSurfaceHandle {
   animateToRegion: (region: GeoRegion, durationMs?: number) => void;
+  fitToCoordinates: (
+    coordinates: GeoPoint[],
+    edgePadding?: { top: number; right: number; bottom: number; left: number },
+    durationMs?: number,
+  ) => void;
 }

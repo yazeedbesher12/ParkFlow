@@ -5,6 +5,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ZoneMarker } from './ZoneMarker';
 import { CheckpointMarker } from './CheckpointMarker';
 import { LandmarkMarker } from './LandmarkMarker';
+import {
+  ParkingLocationMarker,
+  parkingLocationAccessibilityLabel,
+} from './ParkingLocationMarker';
+import { TestLocationMarker } from './TestLocationMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { GeoPoint, GeoRegion } from '@/types';
@@ -62,7 +67,12 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     selectedZoneId,
     onSelectZone,
     onPressBackground,
+    onPressMap,
     userLocation,
+    testLocation,
+    parkingLocations,
+    selectedParkingLocationId,
+    onSelectParkingLocation,
     onRegionChangeComplete,
     checkpoints,
     onSelectCheckpoint,
@@ -82,8 +92,8 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   const [, setFrame] = useState(0);
 
   // Listeners are bound once; read the latest callbacks through a ref.
-  const handlers = useRef({ onPressBackground, onRegionChangeComplete });
-  handlers.current = { onPressBackground, onRegionChangeComplete };
+  const handlers = useRef({ onPressBackground, onPressMap, onRegionChangeComplete });
+  handlers.current = { onPressBackground, onPressMap, onRegionChangeComplete };
 
   useEffect(() => {
     // On web a View ref is the underlying DOM element.
@@ -106,7 +116,10 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
       handlers.current.onRegionChangeComplete?.(next);
       redraw();
     });
-    map.on('click', () => handlers.current.onPressBackground?.());
+    map.on('click', (event) => {
+      handlers.current.onPressMap?.({ latitude: event.latlng.lat, longitude: event.latlng.lng });
+      handlers.current.onPressBackground?.();
+    });
     mapRef.current = map;
 
     // The host may get its real size after mount; fit the region once it has one.
@@ -164,6 +177,21 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   useImperativeHandle(ref, () => ({
     animateToRegion: (next, durationMs = 600) =>
       mapRef.current?.flyToBounds(toBounds(next), { duration: durationMs / 1000 }),
+    fitToCoordinates: (
+      coordinates,
+      edgePadding = { top: 80, right: 40, bottom: 160, left: 40 },
+      durationMs = 600,
+    ) => {
+      if (!coordinates.length) return;
+      const bounds = L.latLngBounds(
+        coordinates.map((point) => [point.latitude, point.longitude] as L.LatLngTuple),
+      );
+      mapRef.current?.flyToBounds(bounds, {
+        paddingTopLeft: [edgePadding.left, edgePadding.top],
+        paddingBottomRight: [edgePadding.right, edgePadding.bottom],
+        duration: durationMs / 1000,
+      });
+    },
   }));
 
   const map = mapRef.current;
@@ -171,6 +199,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     map!.latLngToContainerPoint([latitude, longitude]);
   const size = map?.getSize();
   const userPoint = map && userLocation ? project(userLocation.latitude, userLocation.longitude) : null;
+  const testPoint = map && testLocation ? project(testLocation.latitude, testLocation.longitude) : null;
 
   return (
     <View style={[{ backgroundColor: colors.mapLand, overflow: 'hidden' }, style]}>
@@ -216,6 +245,21 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             </View>
           ) : null}
 
+          {testPoint ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: testPoint.x - 17,
+                top: testPoint.y - 17,
+                width: 34,
+                height: 34,
+              }}
+            >
+              <TestLocationMarker />
+            </View>
+          ) : null}
+
           {checkpoints?.map((checkpoint) => {
             const { x, y } = project(checkpoint.location.latitude, checkpoint.location.longitude);
             if (x < -80 || y < -40 || x > size.x + 80 || y > size.y + 40) return null;
@@ -250,6 +294,33 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
                 );
               })()
             : null}
+
+          {parkingLocations?.map((location) => {
+            const { x, y } = project(location.location.latitude, location.location.longitude);
+            if (x < -60 || y < -60 || x > size.x + 60 || y > size.y + 60) return null;
+
+            return (
+              <Pressable
+                key={location.id}
+                onPress={() => onSelectParkingLocation?.(location)}
+                accessibilityRole="button"
+                accessibilityLabel={parkingLocationAccessibilityLabel(location)}
+                style={{
+                  position: 'absolute',
+                  left: x - 44,
+                  top: y - 50,
+                  width: 88,
+                  alignItems: 'center',
+                  zIndex: location.id === selectedParkingLocationId ? 3 : 2,
+                }}
+              >
+                <ParkingLocationMarker
+                  location={location}
+                  selected={location.id === selectedParkingLocationId}
+                />
+              </Pressable>
+            );
+          })}
 
           {zones.map((zone) => {
             const { x, y } = project(zone.location.latitude, zone.location.longitude);

@@ -122,4 +122,6 @@ export interface RouteResult {
   /** Alternatives that were not taken, and the closure that ruled each one out. */
   rejected: { coordinates: GeoPoint[]; blockedBy?: RouteClosure }[];
   source: 'osrm' | 'straight-line';
+  /** Road-network point used by the router when the raw destination is off-road. */
+  snappedDestination?: GeoPoint;
 }

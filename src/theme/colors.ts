@@ -103,6 +103,10 @@ export type ColorScheme = {
   /** Charts / map */
   mapWater: string;
   mapLand: string;
+  parkingMunicipal: string;
+  parkingPrivate: string;
+  parkingFree: string;
+  parkingRestricted: string;
   skeleton: string;
   skeletonHighlight: string;
 };
@@ -158,6 +162,10 @@ export const lightColors: ColorScheme = {
 
   mapWater: '#DCE9E9',
   mapLand: '#F0F2EB',
+  parkingMunicipal: '#2E7D5B',
+  parkingPrivate: '#3E78B2',
+  parkingFree: '#168C88',
+  parkingRestricted: '#D97706',
   skeleton: palette.neutral200,
   skeletonHighlight: palette.neutral100,
 };
@@ -212,6 +220,10 @@ export const darkColors: ColorScheme = {
 
   mapWater: '#30474B',
   mapLand: '#293831',
+  parkingMunicipal: '#62B88B',
+  parkingPrivate: '#70A9DB',
+  parkingFree: '#43BBB5',
+  parkingRestricted: '#F2A64A',
   skeleton: '#3A4D42',
   skeletonHighlight: '#4A6053',
 };

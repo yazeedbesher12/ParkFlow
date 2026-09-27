@@ -216,7 +216,15 @@ export interface RoadService {
 }
 
 export interface RoutingService {
-  getRoute(from: GeoPoint, to: GeoPoint): Promise<RouteResult>;
+  getRoute(
+    from: GeoPoint,
+    to: GeoPoint,
+    options?: {
+      mode?: 'checkpoint-aware' | 'fastest';
+      snapDestination?: boolean;
+      maxAlternatives?: number;
+    },
+  ): Promise<RouteResult>;
 }
 
 export interface TrustService {

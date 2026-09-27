@@ -4,6 +4,11 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type Region } from 'react-n
 import { ZoneMarker } from './ZoneMarker';
 import { CheckpointMarker } from './CheckpointMarker';
 import { LandmarkMarker } from './LandmarkMarker';
+import {
+  ParkingLocationMarker,
+  parkingLocationAccessibilityLabel,
+} from './ParkingLocationMarker';
+import { TestLocationMarker } from './TestLocationMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { mapStyleDark, mapStyleLight } from './mapStyle';
@@ -19,7 +24,12 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     selectedZoneId,
     onSelectZone,
     onPressBackground,
+    onPressMap,
     userLocation,
+    testLocation,
+    parkingLocations,
+    selectedParkingLocationId,
+    onSelectParkingLocation,
     onRegionChangeComplete,
     checkpoints,
     onSelectCheckpoint,
@@ -35,6 +45,9 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   useImperativeHandle(ref, () => ({
     animateToRegion: (next, durationMs = 500) => {
       mapRef.current?.animateToRegion(next as Region, durationMs);
+    },
+    fitToCoordinates: (coordinates, edgePadding = { top: 80, right: 40, bottom: 160, left: 40 }) => {
+      mapRef.current?.fitToCoordinates(coordinates, { edgePadding, animated: true });
     },
   }));
 
@@ -57,7 +70,10 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
         toolbarEnabled={false}
         rotateEnabled={false}
         pitchEnabled={false}
-        onPress={onPressBackground}
+        onPress={(event) => {
+          onPressMap?.(event.nativeEvent.coordinate);
+          onPressBackground?.();
+        }}
         onRegionChangeComplete={(next) => onRegionChangeComplete?.(next)}
       >
         {route ? (
@@ -95,6 +111,32 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             <LandmarkMarker name={landmark.name} />
           </Marker>
         ) : null}
+
+        {testLocation ? (
+          <Marker coordinate={testLocation} anchor={{ x: 0.5, y: 0.5 }} accessibilityLabel="Test location">
+            <TestLocationMarker />
+          </Marker>
+        ) : null}
+
+        {parkingLocations?.map((location) => (
+          <Marker
+            key={location.id}
+            coordinate={location.location}
+            onPress={(event) => {
+              event.stopPropagation();
+              onSelectParkingLocation?.(location);
+            }}
+            anchor={{ x: 0.5, y: 1 }}
+            zIndex={location.id === selectedParkingLocationId ? 30 : 20}
+            tracksViewChanges
+            accessibilityLabel={parkingLocationAccessibilityLabel(location)}
+          >
+            <ParkingLocationMarker
+              location={location}
+              selected={location.id === selectedParkingLocationId}
+            />
+          </Marker>
+        ))}
 
         {zones.map((zone) => (
           <Marker

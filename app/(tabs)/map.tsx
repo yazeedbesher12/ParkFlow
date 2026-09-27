@@ -11,6 +11,9 @@ import { MapControlRail } from '@/components/map/MapControlRail';
 import { NearbyParkingPanel } from '@/components/map/NearbyParkingPanel';
 import type { NearbyZone } from '@/components/map/CompactZoneCard';
 import { CompactRoutePanel } from '@/components/map/CompactRoutePanel';
+import { ParkingRoutePanel } from '@/components/map/ParkingRoutePanel';
+import { RamallahParkingCard } from '@/components/map/RamallahParkingCard';
+import { TestLocationControl } from '@/components/map/TestLocationControl';
 import { VehicleSelectorSheet } from '@/components/domain/VehicleSelectorSheet';
 import { ZoneSheet } from '@/components/domain/ZoneSheet';
 import { ActiveSessionBanner } from '@/components/domain/ActiveSessionBanner';
@@ -25,33 +28,25 @@ import { useCheckpoints, useRoute } from '@/hooks/useCommunity';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useUserLocation } from '@/hooks/useUserLocation';
 import { DEFAULT_REGION, LANDMARKS, RAMALLAH_CENTER } from '@/services';
-import type { GeoPoint, GeoRegion, ParkingZone } from '@/types';
+import type { GeoPoint, GeoRegion, ParkingZone, RamallahParkingLocation } from '@/types';
 import { distanceMeters } from '@/utils/geo';
 import { findLandmark } from '@/utils/landmarkSearch';
 import { haptics } from '@/utils/haptics';
+import { ramallahParkingLocations } from '@/data/ramallahParking';
 
 /** Clears the custom floating tab bar, including the native bottom safe area. */
 const TAB_BAR_CLEARANCE = 72;
 /** The control rail starts just below the compact vehicle/search cluster. */
 const CONTROL_RAIL_TOP = 116;
 
+const FASTEST_PARKING_ROUTE = {
+  mode: 'fastest',
+  snapDestination: true,
+  maxAlternatives: 2,
+} as const;
+
 /** ~10 m precision keeps GPS jitter from producing new route queries. */
 const round4 = (value: number) => Math.round(value * 10_000) / 10_000;
-
-function regionAround(points: GeoPoint[]): GeoRegion {
-  const latitudes = points.map((point) => point.latitude);
-  const longitudes = points.map((point) => point.longitude);
-  const minLatitude = Math.min(...latitudes);
-  const maxLatitude = Math.max(...latitudes);
-  const minLongitude = Math.min(...longitudes);
-  const maxLongitude = Math.max(...longitudes);
-  return {
-    latitude: (minLatitude + maxLatitude) / 2,
-    longitude: (minLongitude + maxLongitude) / 2,
-    latitudeDelta: Math.max(0.01, (maxLatitude - minLatitude) * 1.6),
-    longitudeDelta: Math.max(0.01, (maxLongitude - minLongitude) * 1.6),
-  };
-}
 
 export default function MapScreen() {
   const router = useRouter();
@@ -64,6 +59,11 @@ export default function MapScreen() {
   const [region, setRegion] = useState<GeoRegion>(DEFAULT_REGION);
   const [selectedZone, setSelectedZone] = useState<ParkingZone>();
   const [routeZone, setRouteZone] = useState<ParkingZone>();
+  const [selectedParkingLocation, setSelectedParkingLocation] =
+    useState<RamallahParkingLocation>();
+  const [routeParkingLocation, setRouteParkingLocation] = useState<RamallahParkingLocation>();
+  const [testLocationMode, setTestLocationMode] = useState(false);
+  const [testLocation, setTestLocation] = useState<GeoPoint>();
   const [vehicleSheetOpen, setVehicleSheetOpen] = useState(false);
   const [codeSheetOpen, setCodeSheetOpen] = useState(false);
   const [entryMenuOpen, setEntryMenuOpen] = useState(false);
@@ -93,8 +93,11 @@ export default function MapScreen() {
   const activeVehicleIds = activeSessions.map((session) => session.vehicleId);
 
   const nearbyOrigin = useMemo<GeoPoint>(
-    () => landmark?.location ?? location ?? { latitude: region.latitude, longitude: region.longitude },
-    [landmark, location, region.latitude, region.longitude],
+    () =>
+      landmark?.location ??
+      testLocation ??
+      location ?? { latitude: region.latitude, longitude: region.longitude },
+    [landmark, testLocation, location, region.latitude, region.longitude],
   );
   const nearbyZones = useMemo<NearbyZone[]>(
     () =>
@@ -136,30 +139,40 @@ export default function MapScreen() {
     [landmark, locale],
   );
 
-  const routeOrigin = useMemo<GeoPoint>(
-    () =>
-      location
-        ? { latitude: round4(location.latitude), longitude: round4(location.longitude) }
-        : RAMALLAH_CENTER,
-    [location],
+  const routeOrigin = useMemo<GeoPoint | undefined>(
+    () => {
+      if (testLocation) return testLocation;
+      if (location) {
+        return { latitude: round4(location.latitude), longitude: round4(location.longitude) };
+      }
+      return routeZone ? RAMALLAH_CENTER : undefined;
+    },
+    [testLocation, location, routeZone],
   );
+  const routeDestination = routeParkingLocation?.location ?? routeZone?.location;
   const { data: route, isFetching: routeLoading } = useRoute(
-    routeZone ? routeOrigin : undefined,
-    routeZone?.location,
+    routeDestination ? routeOrigin : undefined,
+    routeDestination,
+    routeParkingLocation ? FASTEST_PARKING_ROUTE : undefined,
   );
   const mapRoute = useMemo<MapRoute | undefined>(
     () =>
-      routeZone && route
-        ? { coordinates: route.coordinates, alternatives: route.rejected.map((item) => item.coordinates) }
+      routeDestination && route && (!routeParkingLocation || route.source === 'osrm')
+        ? {
+            coordinates: route.coordinates,
+            alternatives: route.rejected.slice(0, 2).map((item) => item.coordinates),
+          }
         : undefined,
-    [route, routeZone],
+    [route, routeDestination, routeParkingLocation],
   );
 
   useEffect(() => {
     if (!mapRoute) return;
-    const next = regionAround(mapRoute.coordinates);
-    setRegion(next);
-    mapRef.current?.animateToRegion(next, 450);
+    mapRef.current?.fitToCoordinates(
+      mapRoute.coordinates,
+      { top: 156, right: 36, bottom: 196, left: 36 },
+      500,
+    );
   }, [mapRoute]);
 
   useEffect(() => {
@@ -179,6 +192,16 @@ export default function MapScreen() {
     setEntryMenuOpen(false);
     setLocationMessage(undefined);
     haptics.light();
+    if (testLocationMode) {
+      if (!testLocation) {
+        setLocationMessage(t('ramallahParking.testLocationPrompt'));
+        return;
+      }
+      const next: GeoRegion = { ...testLocation, latitudeDelta: 0.014, longitudeDelta: 0.014 };
+      setRegion(next);
+      mapRef.current?.animateToRegion(next, 450);
+      return;
+    }
     const point = location ?? (await requestLocation());
     if (!point) {
       setLocationMessage(t('map.locationDeniedBody'));
@@ -187,13 +210,15 @@ export default function MapScreen() {
     const next: GeoRegion = { ...point, latitudeDelta: 0.014, longitudeDelta: 0.014 };
     setRegion(next);
     mapRef.current?.animateToRegion(next, 450);
-  }, [location, requestLocation, t]);
+  }, [testLocationMode, testLocation, location, requestLocation, t]);
 
   const openZone = useCallback((zone: ParkingZone) => {
     haptics.select();
     setEntryMenuOpen(false);
     setNearbyExpanded(false);
     setRouteZone(undefined);
+    setSelectedParkingLocation(undefined);
+    setRouteParkingLocation(undefined);
     setRouteDetailsExpanded(false);
     setSelectedZone(zone);
   }, []);
@@ -212,6 +237,7 @@ export default function MapScreen() {
     (zone: ParkingZone) => {
       setSelectedZone(undefined);
       setRouteZone(undefined);
+      setRouteParkingLocation(undefined);
       setRouteDetailsExpanded(false);
       router.push({ pathname: '/parking/start', params: { zoneId: zone.id } });
     },
@@ -224,12 +250,69 @@ export default function MapScreen() {
     setNearbyExpanded(false);
     setRouteDetailsExpanded(false);
     setRouteZone(zone);
+    setSelectedParkingLocation(undefined);
+    setRouteParkingLocation(undefined);
   }, []);
+
+  const openParkingLocation = useCallback((parkingLocation: RamallahParkingLocation) => {
+    haptics.select();
+    setEntryMenuOpen(false);
+    setNearbyExpanded(false);
+    setSelectedZone(undefined);
+    setRouteZone(undefined);
+    setRouteParkingLocation(undefined);
+    setRouteDetailsExpanded(false);
+    setSelectedParkingLocation(parkingLocation);
+  }, []);
+
+  const navigateToParkingLocation = useCallback(
+    async (parkingLocation: RamallahParkingLocation) => {
+      setLocationMessage(undefined);
+      let origin = testLocation;
+      if (!origin && testLocationMode) {
+        setLocationMessage(t('ramallahParking.testLocationPrompt'));
+        return;
+      }
+      origin ??= location ?? (await requestLocation());
+      if (!origin) {
+        setLocationMessage(t('map.locationDeniedBody'));
+        return;
+      }
+      setSelectedParkingLocation(undefined);
+      setNearbyExpanded(false);
+      setRouteZone(undefined);
+      setRouteParkingLocation(parkingLocation);
+    },
+    [testLocation, testLocationMode, location, requestLocation, t],
+  );
 
   const closeRoute = useCallback(() => {
     setRouteZone(undefined);
+    setRouteParkingLocation(undefined);
     setRouteDetailsExpanded(false);
   }, []);
+
+  const toggleTestLocation = useCallback(() => {
+    setLocationMessage(undefined);
+    setTestLocationMode((enabled) => {
+      if (enabled) {
+        setTestLocation(undefined);
+        setRouteParkingLocation(undefined);
+      } else {
+        setEntryMenuOpen(false);
+      }
+      return !enabled;
+    });
+  }, []);
+
+  const handleMapPress = useCallback(
+    (coordinate: GeoPoint) => {
+      if (!testLocationMode) return;
+      setTestLocation(coordinate);
+      setLocationMessage(undefined);
+    },
+    [testLocationMode],
+  );
 
   const openInMaps = useCallback((zone: ParkingZone) => {
     const { latitude, longitude } = zone.location;
@@ -250,12 +333,18 @@ export default function MapScreen() {
         region={region}
         zones={nearbyZones.map((item) => item.zone)}
         selectedZoneId={selectedZone?.id ?? routeZone?.id}
+        parkingLocations={ramallahParkingLocations}
+        selectedParkingLocationId={selectedParkingLocation?.id ?? routeParkingLocation?.id}
+        onSelectParkingLocation={openParkingLocation}
         onSelectZone={openZone}
+        onPressMap={handleMapPress}
         onPressBackground={() => {
           setSelectedZone(undefined);
+          setSelectedParkingLocation(undefined);
           setEntryMenuOpen(false);
         }}
-        userLocation={location}
+        userLocation={testLocationMode ? undefined : location}
+        testLocation={testLocation}
         onRegionChangeComplete={setRegion}
         checkpoints={mapCheckpoints}
         onSelectCheckpoint={() => router.push('/roads')}
@@ -279,6 +368,8 @@ export default function MapScreen() {
             setSearch(value);
             setEntryMenuOpen(false);
             setRouteZone(undefined);
+            setRouteParkingLocation(undefined);
+            setSelectedParkingLocation(undefined);
             setRouteDetailsExpanded(false);
           }}
           onOpenVehicles={() => setVehicleSheetOpen(true)}
@@ -333,7 +424,24 @@ export default function MapScreen() {
           />
         ) : null}
 
-        {routeZone ? (
+        {__DEV__ ? (
+          <View style={{ alignItems: 'flex-end' }}>
+            <TestLocationControl
+              enabled={testLocationMode}
+              hasLocation={Boolean(testLocation)}
+              onToggle={toggleTestLocation}
+            />
+          </View>
+        ) : null}
+
+        {routeParkingLocation ? (
+          <ParkingRoutePanel
+            location={routeParkingLocation}
+            route={route}
+            loading={routeLoading}
+            onCancel={closeRoute}
+          />
+        ) : routeZone ? (
           <CompactRoutePanel
             zone={routeZone}
             route={route}
@@ -343,6 +451,12 @@ export default function MapScreen() {
             onClose={closeRoute}
             onOpenMaps={() => openInMaps(routeZone)}
             onStartParking={() => startParking(routeZone)}
+          />
+        ) : selectedParkingLocation ? (
+          <RamallahParkingCard
+            location={selectedParkingLocation}
+            loading={locationStatus === 'requesting'}
+            onNavigate={() => void navigateToParkingLocation(selectedParkingLocation)}
           />
         ) : (
           <NearbyParkingPanel
