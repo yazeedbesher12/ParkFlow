@@ -19,6 +19,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useBackendSync } from '@/hooks/useBackendSync';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { isAppError } from '@/utils/errors';
+import { WebAppShell } from '@/components/layout/WebAppShell';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -134,9 +135,11 @@ function AppShell() {
 
   useAuthGate(ready);
 
-  if (!ready) return <View style={{ flex: 1, backgroundColor: colors.deep }} />;
-
-  return <RootNavigator />;
+  return (
+    <WebAppShell>
+      {ready ? <RootNavigator /> : <View style={{ flex: 1, backgroundColor: colors.deep }} />}
+    </WebAppShell>
+  );
 }
 
 export default function RootLayout() {

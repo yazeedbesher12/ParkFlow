@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -17,6 +17,7 @@ import { duration, easing, spring } from '@/theme/motion';
 import { shadow } from '@/theme/shadows';
 import { haptics } from '@/utils/haptics';
 import { useInstantMotion } from '@/hooks/useInstantMotion';
+import { WEB_APP_MAX_WIDTH, WEB_VIEWPORT_HEIGHT } from '@/components/layout/appShellMetrics';
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -162,65 +163,83 @@ export function BottomSheet({
       onRequestClose={dismissible ? onClose : undefined}
       testID={testID}
     >
-      <GestureHandlerRootView style={StyleSheet.absoluteFill}>
-        <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
-          <Pressable
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
-            onPress={handleBackdropPress}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          />
-        </Animated.View>
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          Platform.OS === 'web' && { alignItems: 'center' },
+        ]}
+      >
+        <GestureHandlerRootView
+          style={
+            Platform.OS === 'web'
+              ? {
+                  width: '100%',
+                  maxWidth: WEB_APP_MAX_WIDTH,
+                  height: WEB_VIEWPORT_HEIGHT,
+                  overflow: 'hidden',
+                }
+              : { flex: 1 }
+          }
+        >
+          <Animated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+            <Pressable
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
+              onPress={handleBackdropPress}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            />
+          </Animated.View>
 
-        <View style={styles.anchor} pointerEvents="box-none">
-          <GestureDetector gesture={pan}>
-            <Animated.View
-              onLayout={(event) => {
-                const measured = event.nativeEvent.layout.height;
-                if (measured > 0 && measured !== height) setHeight(measured);
-              }}
-              style={[
-                styles.sheet,
-                {
-                  backgroundColor: colors.surface,
-                  paddingBottom: insets.bottom + spacing.lg,
-                  paddingHorizontal: edgeToEdge ? 0 : screenPadding,
-                },
-                shadow.xl,
-                sheetStyle,
-                contentStyle,
-              ]}
-            >
-              {dismissible ? (
-                <View style={styles.handleArea}>
-                  <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
-                </View>
-              ) : (
-                <View style={{ height: spacing.lg }} />
-              )}
+          <View style={styles.anchor} pointerEvents="box-none">
+            <GestureDetector gesture={pan}>
+              <Animated.View
+                onLayout={(event) => {
+                  const measured = event.nativeEvent.layout.height;
+                  if (measured > 0 && measured !== height) setHeight(measured);
+                }}
+                style={[
+                  styles.sheet,
+                  {
+                    backgroundColor: colors.surface,
+                    paddingBottom: insets.bottom + spacing.lg,
+                    paddingHorizontal: edgeToEdge ? 0 : screenPadding,
+                  },
+                  shadow.xl,
+                  sheetStyle,
+                  contentStyle,
+                ]}
+              >
+                {dismissible ? (
+                  <View style={styles.handleArea}>
+                    <View style={[styles.handle, { backgroundColor: colors.borderStrong }]} />
+                  </View>
+                ) : (
+                  <View style={{ height: spacing.lg }} />
+                )}
 
-              {title ? (
-                <View
-                  style={{
-                    gap: 4,
-                    marginBottom: spacing.lg,
-                    paddingHorizontal: edgeToEdge ? screenPadding : 0,
-                  }}
-                >
-                  <AppText variant="h2">{title}</AppText>
-                  {subtitle ? (
-                    <AppText variant="body" color="textSecondary">
-                      {subtitle}
-                    </AppText>
-                  ) : null}
-                </View>
-              ) : null}
+                {title ? (
+                  <View
+                    style={{
+                      gap: 4,
+                      marginBottom: spacing.lg,
+                      paddingHorizontal: edgeToEdge ? screenPadding : 0,
+                    }}
+                  >
+                    <AppText variant="h2">{title}</AppText>
+                    {subtitle ? (
+                      <AppText variant="body" color="textSecondary">
+                        {subtitle}
+                      </AppText>
+                    ) : null}
+                  </View>
+                ) : null}
 
-              {children}
-            </Animated.View>
-          </GestureDetector>
-        </View>
-      </GestureHandlerRootView>
+                {children}
+              </Animated.View>
+            </GestureDetector>
+          </View>
+        </GestureHandlerRootView>
+      </View>
     </Modal>
   );
 }

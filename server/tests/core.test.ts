@@ -19,6 +19,7 @@ import { validateFile } from '../src/providers/storage';
 import { notify } from '../src/modules/notifications/service';
 import { post } from '../src/modules/wallet/ledger';
 import { emailProvider } from '../src/providers/email';
+import { env } from '../src/config/env';
 const app=createApp();
 const sentCode=()=>vi.mocked(emailProvider.sendOtp).mock.calls.at(-1)![1];
 const key=()=>randomUUID();
@@ -40,6 +41,21 @@ beforeEach(async()=>{
  driver=await login('599111111');other=await login('599222222');vehicleId=(await vehicles.create(driver.user.id,{plateNumber:'1234567',type:'private'})).id;
 });
 describe('authentication and authorization',()=>{
+ it('keeps development login disabled unless both development guards are enabled',async()=>{
+  expect((await request(app).post('/api/v1/auth/dev-login').send({email:'dev@example.com'})).status).toBe(403);
+  const nodeEnv=env.NODE_ENV,skip=env.DEV_SKIP_EMAIL_OTP;
+  try{
+   env.NODE_ENV='development';env.DEV_SKIP_EMAIL_OTP=true;
+   const first=await request(app).post('/api/v1/auth/dev-login').send({email:' Dev@Example.COM '});
+   expect(first.status).toBe(200);expect(first.body).toMatchObject({user:{email:'dev@example.com'},isNewUser:true});
+   expect(first.body.user.emailVerifiedAt).toBeTruthy();
+   expect(await db.wallet.count({where:{userId:first.body.user.id}})).toBe(1);
+   await db.user.update({where:{id:first.body.user.id},data:{fullName:'Dev User'}});
+   const again=await request(app).post('/api/v1/auth/dev-login').send({email:'dev@example.com'});
+   expect(again.status).toBe(200);expect(again.body).toMatchObject({user:{id:first.body.user.id},isNewUser:false});
+   await expect(auth.authenticate(again.body.session.accessToken)).resolves.toMatchObject({userId:first.body.user.id});
+  }finally{env.NODE_ENV=nodeEnv;env.DEV_SKIP_EMAIL_OTP=skip;}
+ });
  it('normalizes emails and stores only OTP hashes',async()=>{const c=await auth.requestOtp({email:' Person@Example.COM '});expect(c.email).toBe('person@example.com');expect(c).not.toHaveProperty('devCode');expect(sentCode()).toMatch(/^\d{6}$/);const state=await redis.hgetall('otp:email:'+c.challengeId);expect(JSON.stringify(state)).not.toContain(sentCode());expect(state.hash).toHaveLength(64);});
  it('expires OTP and enforces one-time use',async()=>{const c=await auth.requestOtp({email:'person@example.com'});await redis.del('otp:email:'+c.challengeId);await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'OTP_EXPIRED'});await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toBeDefined();});
  it('locks after five incorrect OTP attempts',async()=>{const c=await auth.requestOtp({email:'person@example.com'});for(let i=0;i<5;i++)await expect(auth.verifyOtp({challengeId:c.challengeId,code:'000000'},{})).rejects.toBeDefined();await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'OTP_LOCKED'});});

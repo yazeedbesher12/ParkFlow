@@ -40,13 +40,20 @@ import type {
 
 export interface AuthService {
   requestOtp(input: { email: string }): Promise<OtpChallenge>;
+  devLogin(input: { email: string }): Promise<AuthResult>;
   verifyOtp(input: {
     challengeId: string;
     code: string;
-  }): Promise<{ session: AuthSession; user: User; isNewUser: boolean }>;
+  }): Promise<AuthResult>;
   completeProfile(input: { userId: string; fullName: string }): Promise<User>;
   refresh(refreshToken: string): Promise<AuthSession>;
   signOut(): Promise<void>;
+}
+
+export interface AuthResult {
+  session: AuthSession;
+  user: User;
+  isNewUser: boolean;
 }
 
 export interface CreateVehicleInput {

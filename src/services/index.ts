@@ -25,4 +25,4 @@ export const services: Services = {
   trust: httpTrustService,
 };
 export * from './types';
-export { DEFAULT_REGION, LANDMARKS } from '../data/mapDefaults';
+export { DEFAULT_REGION, LANDMARKS, RAMALLAH_CENTER } from '../data/mapDefaults';

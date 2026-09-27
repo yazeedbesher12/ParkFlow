@@ -256,12 +256,4 @@ export const ZONES: ParkingZone[] = [
   },
 ];
 
-/** Where the map opens when we have no GPS fix yet — central Ramallah. */
-export const DEFAULT_REGION = {
-  latitude: 31.9052,
-  longitude: 35.2032,
-  latitudeDelta: 0.028,
-  longitudeDelta: 0.028,
-};
-
 export const findZone = (id: string): ParkingZone | undefined => ZONES.find((z) => z.id === id);

@@ -15,13 +15,22 @@ const lm = (
   kind: Landmark['kind'] = 'landmark',
 ): Landmark => ({ id, nameAr, nameEn, kind, location: { latitude, longitude }, aliases });
 
+export const RAMALLAH_CENTER = { latitude: 31.90332, longitude: 35.20583 } as const;
+
 export const LANDMARKS: Landmark[] = [
   lm('lm_nasser_mosque', 'مسجد جمال عبد الناصر', 'Jamal Abdel Nasser Mosque', 31.90512, 35.19942, [
     'جامع جمال عبد الناصر',
     'مسجد عبد الناصر',
   ]),
   lm('lm_grand_mosque', 'المسجد الكبير', 'Grand Mosque Ramallah', 31.89845, 35.20401, ['الجامع الكبير']),
-  lm('lm_manara', 'دوار المنارة', 'Al-Manara Square', 31.90332, 35.20583, ['المنارة', 'Manara']),
+  lm(
+    'lm_manara',
+    'دوار المنارة',
+    'Al-Manara Square',
+    RAMALLAH_CENTER.latitude,
+    RAMALLAH_CENTER.longitude,
+    ['المنارة', 'Manara'],
+  ),
   lm('lm_second_circle', 'الدوار الثاني', 'Second Circle', 31.90381, 35.20719, ['الدوار التاني']),
   lm('lm_clock_circle', 'دوار الساعة', 'Clock Circle', 31.90366, 35.20702, ['الساعة']),
   lm('lm_gov_hospital', 'مستشفى رام الله الحكومي', 'Ramallah Governmental Hospital', 31.90097, 35.19318, [
@@ -59,4 +68,9 @@ export const LANDMARKS: Landmark[] = [
   lm('lm_trade_tower', 'برج فلسطين التجاري', 'Palestine Trade Tower', 31.90477, 35.20669, undefined, 'building'),
 ];
 
-export const DEFAULT_REGION = {latitude:31.9052,longitude:35.2032,latitudeDelta:0.028,longitudeDelta:0.028};
+/** City-level opening view centred on Al-Manara Square. */
+export const DEFAULT_REGION = {
+  ...RAMALLAH_CENTER,
+  latitudeDelta: 0.024,
+  longitudeDelta: 0.024,
+};

@@ -23,6 +23,7 @@ export function createApp(){const app=express();app.disable('x-powered-by');
  app.use('/api/v1',limiter('rate:api:',300,60000));
  app.use('/api/v1/auth/request-otp',limiter('rate:otp:',10,600000));
  app.use('/api/v1/auth/verify-otp',limiter('rate:verify:',30,600000));
+ app.use('/api/v1/auth/dev-login',limiter('rate:dev-login:',30,600000));
  app.post('/api/v1/webhooks/payments/:provider',express.raw({type:'application/json',limit:'64kb'}),async(req,res,next)=>{try{res.json(await webhook(String(req.params.provider),req.body,req.get('X-Payment-Signature')??''));}catch(e){next(e);}});
  app.use(express.json({limit:'128kb'}));app.use('/api/v1',api);
  if(env.NODE_ENV!=='production'){

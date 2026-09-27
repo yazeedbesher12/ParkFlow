@@ -15,6 +15,7 @@ import { routingService } from '../../modules/routing/service';
 const email=z.object({email:z.string().trim().toLowerCase().pipe(z.email().max(254))}).strict();
 route('post','/auth/request-otp',email,(_r,b)=>authentication.requestOtp(b),false);
 route('post','/auth/verify-otp',z.object({challengeId:z.string().uuid(),code:z.string().regex(/^\d{6}$/)}).strict(),(r,b)=>authentication.verifyOtp(b,{ip:r.ip,device:r.get('user-agent')?.slice(0,500)}),false);
+route('post','/auth/dev-login',email,(r,b)=>authentication.devLogin(b,{ip:r.ip,device:r.get('user-agent')?.slice(0,500)}),false);
 route('post','/auth/refresh',z.object({refreshToken:z.string().max(4096)}).strict(),(r,b)=>authentication.refresh(b.refreshToken,{ip:r.ip,device:r.get('user-agent')?.slice(0,500)}),false);
 route('post','/auth/logout',empty,r=>authentication.logout(user(r),r.auth!.sid));
 route('post','/auth/logout-all',empty,r=>authentication.logout(user(r),r.auth!.sid,true));

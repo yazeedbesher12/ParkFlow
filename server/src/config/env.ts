@@ -3,6 +3,7 @@ import { z } from 'zod';
 const optional = z.string().optional();
 export const env = z.object({
  NODE_ENV:z.enum(['development','test','production']).default('development'), PORT:z.coerce.number().default(4000),
+ DEV_SKIP_EMAIL_OTP:z.enum(['true','false']).default('false').transform(v=>v==='true'),
  DATABASE_URL:z.string().min(1), REDIS_URL:z.string().url(),
  JWT_ACCESS_SECRET:z.string().min(32), JWT_REFRESH_SECRET:z.string().min(32),
  ACCESS_TOKEN_TTL:z.coerce.number().int().positive().default(900), REFRESH_TOKEN_TTL:z.coerce.number().int().positive().default(2592000),
@@ -15,6 +16,9 @@ export const env = z.object({
  S3_ENDPOINT:z.string().url(), S3_REGION:z.string().default('us-east-1'), S3_BUCKET:z.string(), S3_ACCESS_KEY:z.string(), S3_SECRET_KEY:z.string(),
  FIREBASE_PROJECT_ID:optional,FIREBASE_CLIENT_EMAIL:optional,FIREBASE_PRIVATE_KEY:optional,EXPO_PUSH_ACCESS_TOKEN:optional,
 }).parse(process.env);
+if(env.NODE_ENV==='production'&&env.DEV_SKIP_EMAIL_OTP) {
+ throw new Error('DEV_SKIP_EMAIL_OTP must be false in production');
+}
 if(env.NODE_ENV==='production') {
  if(!env.SMTP_PASSWORD) throw new Error('SMTP_PASSWORD is required');
  if(env.PAYMENT_PROVIDER==='development') throw new Error('Production requires configured payment provider');

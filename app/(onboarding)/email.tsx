@@ -16,28 +16,44 @@ import { z } from 'zod';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 import { services } from '@/services';
+import type { AuthResult } from '@/services/types';
+import type { OtpChallenge } from '@/types';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
+import { usePreferencesStore } from '@/store/preferencesStore';
 
 export default function EmailScreen() {
   const router = useRouter();
   const { t } = useLocale();
+  const completeOnboarding = usePreferencesStore((state) => state.completeOnboarding);
   const [email, setEmail] = useState('');
   const [touched, setTouched] = useState(false);
   const normalized = email.trim().toLowerCase();
   const isValid = z.email().max(254).safeParse(normalized).success;
   const showError = touched && normalized.length > 0 && !isValid;
+  const devSkipEmailOtp = __DEV__ && process.env.EXPO_PUBLIC_DEV_SKIP_EMAIL_OTP === 'true';
 
-  const requestOtp = useMutation({
-    mutationFn: () => services.auth.requestOtp({ email: normalized }),
-    onSuccess: (challenge) => {
+  const continueWithEmail = useMutation<AuthResult | OtpChallenge>({
+    mutationFn: () => devSkipEmailOtp
+      ? services.auth.devLogin({ email: normalized })
+      : services.auth.requestOtp({ email: normalized }),
+    onSuccess: (result) => {
       haptics.success();
+      if ('session' in result) {
+        if (result.user.fullName) {
+          completeOnboarding();
+          router.replace('/(tabs)/map');
+        } else {
+          router.replace('/(onboarding)/name');
+        }
+        return;
+      }
       router.push({
         pathname: '/(onboarding)/otp',
         params: {
-          challengeId: challenge.challengeId,
-          email: challenge.email,
-          resendAfter: String(challenge.resendAfterSeconds),
+          challengeId: result.challengeId,
+          email: result.email,
+          resendAfter: String(result.resendAfterSeconds),
         },
       });
     },
@@ -74,11 +90,11 @@ export default function EmailScreen() {
           testID="email-input"
         />
 
-        {requestOtp.isError ? (
+        {continueWithEmail.isError ? (
           <InlineNotice
             tone="danger"
             title={t('common.somethingWrong')}
-            body={errorMessage(requestOtp.error)}
+            body={errorMessage(continueWithEmail.error)}
           />
         ) : null}
       </View>
@@ -97,8 +113,8 @@ export default function EmailScreen() {
         <AppButton
           label={t('common.continue')}
           disabled={!isValid}
-          loading={requestOtp.isPending}
-          onPress={() => requestOtp.mutate()}
+          loading={continueWithEmail.isPending}
+          onPress={() => continueWithEmail.mutate()}
           testID="email-continue"
         />
       </View>

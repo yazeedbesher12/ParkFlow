@@ -47,6 +47,19 @@ export async function verifyOtp(input:{challengeId:string;code:string},meta:{dev
  return {session:await issue(tx,user,meta),user,isNewUser:!user.fullName};
  });
 }
+export async function devLogin(input:{email:string},meta:{device?:string;ip?:string}){
+ assert(env.NODE_ENV==='development'&&env.DEV_SKIP_EMAIL_OTP,'DEV_LOGIN_DISABLED','Development login is disabled',403);
+ const email=normalizeEmail(input.email);
+ return atomic(async tx=>{
+  await lock(tx,`email:${email}`);
+  const existing=await tx.user.findUnique({where:{email}});
+  const user=existing
+   ?await tx.user.update({where:{id:existing.id},data:{lastLoginAt:new Date()}})
+   :await tx.user.create({data:{email,emailVerifiedAt:new Date(),lastLoginAt:new Date(),wallet:{create:{}}}});
+  assert(user.status==='ACTIVE','ACCOUNT_SUSPENDED','This account is suspended',403);
+  return {session:await issue(tx,user,meta),user,isNewUser:!user.fullName};
+ });
+}
 export function verifyAccess(token:string){try{
  const v=jwt.verify(token,env.JWT_ACCESS_SECRET,{algorithms:['HS256'],issuer:'parkflow',audience:'parkflow-api'}) as jwt.JwtPayload;
  assert(v.kind==='access'&&typeof v.sub==='string'&&typeof v.sid==='string','UNAUTHORIZED','Invalid token',401);return {userId:v.sub,sid:v.sid,exp:v.exp!};

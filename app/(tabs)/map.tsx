@@ -1,203 +1,113 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Linking, Platform, ScrollView, View } from 'react-native';
+import { Linking, Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import {
-  Bell,
-  ChevronDown,
-  Hash,
-  LocateFixed,
-  MapPin,
-  Navigation,
-  QrCode,
-  ShieldCheck,
-  TriangleAlert,
-  X,
-} from 'lucide-react-native';
 
-import {
-  AppButton,
-  AppText,
-  Card,
-  IconButton,
-  PressableScale,
-  Reveal,
-  SearchField,
-} from '@/components/ui';
 import { MapSurface } from '@/components/map/MapSurface';
 import type { MapCheckpoint, MapLandmark, MapRoute, MapSurfaceHandle } from '@/components/map/types';
-import { PlateBadge } from '@/components/domain/PlateBadge';
+import { MapTopBar } from '@/components/map/MapTopBar';
+import { MapControlRail } from '@/components/map/MapControlRail';
+import { NearbyParkingPanel } from '@/components/map/NearbyParkingPanel';
+import type { NearbyZone } from '@/components/map/CompactZoneCard';
+import { CompactRoutePanel } from '@/components/map/CompactRoutePanel';
 import { VehicleSelectorSheet } from '@/components/domain/VehicleSelectorSheet';
 import { ZoneSheet } from '@/components/domain/ZoneSheet';
 import { ActiveSessionBanner } from '@/components/domain/ActiveSessionBanner';
 import { ZoneCodeSheet } from '@/components/domain/ZoneCodeSheet';
-import { ZoneCard } from '@/components/domain/ZoneCard';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
-import { radius } from '@/theme/radius';
-import { shadow } from '@/theme/shadows';
 import { useLocale } from '@/hooks/useLocale';
 import { useSelectedVehicle } from '@/hooks/useVehicles';
 import { useActiveSessions, useZones } from '@/hooks/useParking';
 import { useCheckpoints, useRoute } from '@/hooks/useCommunity';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
-import { useCurrentUser } from '@/hooks/useSession';
 import { useUserLocation } from '@/hooks/useUserLocation';
-import { DEFAULT_REGION, LANDMARKS } from '@/services';
-import type { GeoPoint, GeoRegion, ParkingZone, RouteClosure, RouteResult } from '@/types';
-import { distanceMeters, formatDistance } from '@/utils/geo';
+import { DEFAULT_REGION, LANDMARKS, RAMALLAH_CENTER } from '@/services';
+import type { GeoPoint, GeoRegion, ParkingZone } from '@/types';
+import { distanceMeters } from '@/utils/geo';
 import { findLandmark } from '@/utils/landmarkSearch';
 import { haptics } from '@/utils/haptics';
 
-/** Bottom padding so the nearby list clears the floating tab bar. */
-const TAB_BAR_CLEARANCE = 96;
-/** Height the alert / landmark card adds under the search bar. */
-const HEADER_CARD_HEIGHT = 76;
-/**
- * Where routes start when location is off: Birzeit University, far enough out
- * that the route is worth showing. Always labelled as a demo start in the UI.
- */
-const DEMO_ORIGIN: GeoPoint = { latitude: 31.96128, longitude: 35.18426 };
+/** Clears the custom floating tab bar, including the native bottom safe area. */
+const TAB_BAR_CLEARANCE = 72;
+/** The control rail starts just below the compact vehicle/search cluster. */
+const CONTROL_RAIL_TOP = 116;
 
-/** ~10 m precision — keeps GPS jitter from re-requesting the route. */
-const round4 = (n: number) => Math.round(n * 10_000) / 10_000;
+/** ~10 m precision keeps GPS jitter from producing new route queries. */
+const round4 = (value: number) => Math.round(value * 10_000) / 10_000;
 
-function greetingKey(): 'map.greetingMorning' | 'map.greetingAfternoon' | 'map.greetingEvening' {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'map.greetingMorning';
-  if (hour < 17) return 'map.greetingAfternoon';
-  return 'map.greetingEvening';
-}
-
-/** A region that frames every point, with a margin. */
 function regionAround(points: GeoPoint[]): GeoRegion {
-  const lats = points.map((p) => p.latitude);
-  const lngs = points.map((p) => p.longitude);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
+  const latitudes = points.map((point) => point.latitude);
+  const longitudes = points.map((point) => point.longitude);
+  const minLatitude = Math.min(...latitudes);
+  const maxLatitude = Math.max(...latitudes);
+  const minLongitude = Math.min(...longitudes);
+  const maxLongitude = Math.max(...longitudes);
   return {
-    latitude: (minLat + maxLat) / 2,
-    longitude: (minLng + maxLng) / 2,
-    latitudeDelta: Math.max(0.01, (maxLat - minLat) * 1.6),
-    longitudeDelta: Math.max(0.01, (maxLng - minLng) * 1.6),
+    latitude: (minLatitude + maxLatitude) / 2,
+    longitude: (minLongitude + maxLongitude) / 2,
+    latitudeDelta: Math.max(0.01, (maxLatitude - minLatitude) * 1.6),
+    longitudeDelta: Math.max(0.01, (maxLongitude - minLongitude) * 1.6),
   };
-}
-
-/** What the route does about closures: avoids them, passes them, or finds none. */
-function RouteNotes({ route }: { route: RouteResult }) {
-  const { colors } = useTheme();
-  const { t, row, locale } = useLocale();
-  const nameOf = (c: RouteClosure) => (locale === 'ar' ? c.nameAr : c.nameEn);
-  const statusOf = (c: RouteClosure) => t(`roads.status.${c.status}` as const);
-
-  const avoided = [
-    ...new Map(
-      route.rejected.flatMap((r) => (r.blockedBy ? [[r.blockedBy.checkpointId, r.blockedBy] as const] : [])),
-    ).values(),
-  ].filter((c) => !route.closuresOnRoute.some((on) => on.checkpointId === c.checkpointId));
-
-  const lines: { key: string; ok: boolean; text: string }[] = [];
-  if (route.source === 'straight-line') {
-    lines.push({ key: 'approx', ok: false, text: t('route.approximate') });
-  }
-  for (const closure of route.closuresOnRoute) {
-    lines.push({
-      key: `on-${closure.checkpointId}`,
-      ok: false,
-      text: t('route.passes', { name: nameOf(closure), status: statusOf(closure) }),
-    });
-  }
-  for (const closure of avoided) {
-    lines.push({
-      key: `avoid-${closure.checkpointId}`,
-      ok: true,
-      text: t('route.avoids', { name: nameOf(closure), status: statusOf(closure) }),
-    });
-  }
-  if (!route.closuresOnRoute.length && !avoided.length) {
-    lines.push({ key: 'clear', ok: true, text: t('route.clear') });
-  }
-
-  return (
-    <View style={{ gap: spacing.xs }}>
-      {lines.map((line) => (
-        <View key={line.key} style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
-          {line.ok ? (
-            <ShieldCheck size={16} color={colors.success} strokeWidth={2.2} />
-          ) : (
-            <TriangleAlert size={16} color={colors.warning} strokeWidth={2.2} />
-          )}
-          <AppText
-            variant="bodySm"
-            color={line.ok ? 'successText' : 'warningText'}
-            style={{ flex: 1 }}
-          >
-            {line.text}
-          </AppText>
-        </View>
-      ))}
-    </View>
-  );
 }
 
 export default function MapScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { t, row, locale } = useLocale();
+  const { t, locale } = useLocale();
   const insets = useSafeAreaInsets();
 
   const mapRef = useRef<MapSurfaceHandle>(null);
   const [search, setSearch] = useState('');
   const [region, setRegion] = useState<GeoRegion>(DEFAULT_REGION);
-  const [selectedZone, setSelectedZone] = useState<ParkingZone | undefined>();
-  const [routeZone, setRouteZone] = useState<ParkingZone | undefined>();
+  const [selectedZone, setSelectedZone] = useState<ParkingZone>();
+  const [routeZone, setRouteZone] = useState<ParkingZone>();
   const [vehicleSheetOpen, setVehicleSheetOpen] = useState(false);
   const [codeSheetOpen, setCodeSheetOpen] = useState(false);
+  const [entryMenuOpen, setEntryMenuOpen] = useState(false);
+  const [nearbyExpanded, setNearbyExpanded] = useState(false);
+  const [routeDetailsExpanded, setRouteDetailsExpanded] = useState(false);
+  const [locationMessage, setLocationMessage] = useState<string>();
 
   const trimmedSearch = search.trim();
-  // "قرب دوار المنارة" is a place, not a zone name: resolve it and show the
-  // parking around it instead of filtering zones by name.
   const landmark = useMemo(
     () => (trimmedSearch.length >= 3 ? findLandmark(trimmedSearch, LANDMARKS)?.landmark : undefined),
     [trimmedSearch],
   );
 
-  const { user } = useCurrentUser();
   const { vehicles, selected, select } = useSelectedVehicle();
   const { data: zones = [] } = useZones(landmark ? undefined : trimmedSearch || undefined);
   const { data: activeSessions = [] } = useActiveSessions();
   const { data: checkpoints = [] } = useCheckpoints();
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
-  const { location, status: locationStatus, request: requestLocation } = useUserLocation();
+  // Location is deliberately opt-in: Ramallah remains the opening view until locate is pressed.
+  const { location, status: locationStatus, request: requestLocation } = useUserLocation(false);
 
-  // The session shown in the banner is the one for the currently selected
-  // vehicle when it has one, otherwise the most recent — a driver switching
-  // vehicles should see that vehicle's timer.
-  const bannerSession = useMemo(() => {
-    if (!activeSessions.length) return undefined;
-    return activeSessions.find((s) => s.vehicleId === selected?.id) ?? activeSessions[0];
-  }, [activeSessions, selected?.id]);
+  const bannerSession = useMemo(
+    () => activeSessions.find((session) => session.vehicleId === selected?.id) ?? activeSessions[0],
+    [activeSessions, selected?.id],
+  );
+  const bannerVehicle = vehicles.find((vehicle) => vehicle.id === bannerSession?.vehicleId);
+  const activeVehicleIds = activeSessions.map((session) => session.vehicleId);
 
-  const bannerVehicle = vehicles.find((v) => v.id === bannerSession?.vehicleId);
-  const activeVehicleIds = activeSessions.map((s) => s.vehicleId);
+  const nearbyOrigin = useMemo<GeoPoint>(
+    () => landmark?.location ?? location ?? { latitude: region.latitude, longitude: region.longitude },
+    [landmark, location, region.latitude, region.longitude],
+  );
+  const nearbyZones = useMemo<NearbyZone[]>(
+    () =>
+      zones
+        .map((zone) => ({ zone, distanceMeters: distanceMeters(nearbyOrigin, zone.location) }))
+        .sort((a, b) => a.distanceMeters - b.distanceMeters),
+    [zones, nearbyOrigin],
+  );
 
-  const sortedZones = useMemo(() => {
-    const origin = landmark?.location ?? location;
-    if (!origin) return zones;
-    return [...zones].sort(
-      (a, b) => distanceMeters(origin, a.location) - distanceMeters(origin, b.location),
-    );
-  }, [zones, location, landmark]);
-
-  // ---- Road alerts --------------------------------------------------------
   const alerts = useMemo(
     () =>
       checkpoints
-        .filter((c) => !c.assumed && c.status !== 'open')
+        .filter((checkpoint) => !checkpoint.assumed && checkpoint.status !== 'open')
         .sort(
           (a, b) =>
             Number(b.status === 'closed') - Number(a.status === 'closed') ||
@@ -205,18 +115,17 @@ export default function MapScreen() {
         ),
     [checkpoints],
   );
-  const topAlert = alerts[0];
 
   const mapCheckpoints = useMemo<MapCheckpoint[]>(
     () =>
-      checkpoints.map((c) => ({
-        id: c.id,
-        name: locale === 'ar' ? c.nameAr : c.nameEn,
-        location: c.location,
-        status: c.status,
-        assumed: c.assumed,
+      alerts.map((checkpoint) => ({
+        id: checkpoint.id,
+        name: locale === 'ar' ? checkpoint.nameAr : checkpoint.nameEn,
+        location: checkpoint.location,
+        status: checkpoint.status,
+        assumed: checkpoint.assumed,
       })),
-    [checkpoints, locale],
+    [alerts, locale],
   );
 
   const mapLandmark = useMemo<MapLandmark | undefined>(
@@ -227,12 +136,11 @@ export default function MapScreen() {
     [landmark, locale],
   );
 
-  // ---- Checkpoint-aware route --------------------------------------------
   const routeOrigin = useMemo<GeoPoint>(
     () =>
       location
         ? { latitude: round4(location.latitude), longitude: round4(location.longitude) }
-        : DEMO_ORIGIN,
+        : RAMALLAH_CENTER,
     [location],
   );
   const { data: route, isFetching: routeLoading } = useRoute(
@@ -242,46 +150,69 @@ export default function MapScreen() {
   const mapRoute = useMemo<MapRoute | undefined>(
     () =>
       routeZone && route
-        ? { coordinates: route.coordinates, alternatives: route.rejected.map((r) => r.coordinates) }
+        ? { coordinates: route.coordinates, alternatives: route.rejected.map((item) => item.coordinates) }
         : undefined,
     [route, routeZone],
   );
 
-  // Frame the whole route once it arrives.
   useEffect(() => {
     if (!mapRoute) return;
     const next = regionAround(mapRoute.coordinates);
     setRegion(next);
-    mapRef.current?.animateToRegion(next);
+    mapRef.current?.animateToRegion(next, 450);
   }, [mapRoute]);
 
-  // Fly to the landmark a search resolved to.
   useEffect(() => {
     if (!landmark) return;
     const next: GeoRegion = { ...landmark.location, latitudeDelta: 0.012, longitudeDelta: 0.012 };
     setRegion(next);
-    mapRef.current?.animateToRegion(next);
+    mapRef.current?.animateToRegion(next, 400);
   }, [landmark]);
 
+  useEffect(() => {
+    if (!locationMessage) return;
+    const timeout = setTimeout(() => setLocationMessage(undefined), 3600);
+    return () => clearTimeout(timeout);
+  }, [locationMessage]);
+
   const recenter = useCallback(async () => {
+    setEntryMenuOpen(false);
+    setLocationMessage(undefined);
     haptics.light();
     const point = location ?? (await requestLocation());
-    const next: GeoRegion = point
-      ? { ...point, latitudeDelta: 0.014, longitudeDelta: 0.014 }
-      : DEFAULT_REGION;
+    if (!point) {
+      setLocationMessage(t('map.locationDeniedBody'));
+      return;
+    }
+    const next: GeoRegion = { ...point, latitudeDelta: 0.014, longitudeDelta: 0.014 };
     setRegion(next);
-    mapRef.current?.animateToRegion(next);
-  }, [location, requestLocation]);
+    mapRef.current?.animateToRegion(next, 450);
+  }, [location, requestLocation, t]);
 
   const openZone = useCallback((zone: ParkingZone) => {
     haptics.select();
+    setEntryMenuOpen(false);
+    setNearbyExpanded(false);
+    setRouteZone(undefined);
+    setRouteDetailsExpanded(false);
     setSelectedZone(zone);
   }, []);
+
+  const focusZone = useCallback(
+    (item: NearbyZone) => {
+      const next: GeoRegion = { ...item.zone.location, latitudeDelta: 0.01, longitudeDelta: 0.01 };
+      setRegion(next);
+      mapRef.current?.animateToRegion(next, 400);
+      openZone(item.zone);
+    },
+    [openZone],
+  );
 
   const startParking = useCallback(
     (zone: ParkingZone) => {
       setSelectedZone(undefined);
       setRouteZone(undefined);
+      setRouteDetailsExpanded(false);
       router.push({ pathname: '/parking/start', params: { zoneId: zone.id } });
     },
     [router],
@@ -290,7 +221,14 @@ export default function MapScreen() {
   const showRoute = useCallback((zone: ParkingZone) => {
     haptics.select();
     setSelectedZone(undefined);
+    setNearbyExpanded(false);
+    setRouteDetailsExpanded(false);
     setRouteZone(zone);
+  }, []);
+
+  const closeRoute = useCallback(() => {
+    setRouteZone(undefined);
+    setRouteDetailsExpanded(false);
   }, []);
 
   const openInMaps = useCallback((zone: ParkingZone) => {
@@ -303,219 +241,87 @@ export default function MapScreen() {
     void Linking.openURL(url).catch(() => undefined);
   }, []);
 
-  const zoneName = (zone: ParkingZone) => (locale === 'ar' ? zone.nameAr : zone.name);
-  const hasHeaderCard = Boolean(landmark || topAlert);
-
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, overflow: 'hidden', backgroundColor: colors.background }}>
       <StatusBar style="dark" />
 
       <MapSurface
         ref={mapRef}
         region={region}
-        zones={sortedZones}
-        selectedZoneId={selectedZone?.id}
+        zones={nearbyZones.map((item) => item.zone)}
+        selectedZoneId={selectedZone?.id ?? routeZone?.id}
         onSelectZone={openZone}
-        onPressBackground={() => setSelectedZone(undefined)}
+        onPressBackground={() => {
+          setSelectedZone(undefined);
+          setEntryMenuOpen(false);
+        }}
         userLocation={location}
         onRegionChangeComplete={setRegion}
         checkpoints={mapCheckpoints}
         onSelectCheckpoint={() => router.push('/roads')}
         route={mapRoute}
         landmark={mapLandmark}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+        style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
       />
 
-      {/* ---- Floating header ------------------------------------------- */}
-      <View
-        pointerEvents="box-none"
-        style={{ paddingTop: insets.top + spacing.sm, paddingHorizontal: screenPadding, gap: spacing.md }}
-      >
-        <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.md }}>
-          <PressableScale
-            onPress={() => {
-              haptics.select();
-              setVehicleSheetOpen(true);
-            }}
-            scaleTo={0.97}
-            accessibilityRole="button"
-            accessibilityLabel={
-              selected ? `${selected.displayName}, ${selected.plateNumber}` : t('vehicle.select')
-            }
-            accessibilityHint={t('parking.wrongVehicle')}
-            style={[
-              {
-                flex: 1,
-                flexDirection: row,
-                alignItems: 'center',
-                gap: spacing.md,
-                paddingVertical: spacing.sm + 2,
-                paddingHorizontal: spacing.lg,
-                borderRadius: radius.pill,
-                backgroundColor: colors.surface,
-              },
-              shadow.md,
-            ]}
-            testID="vehicle-selector"
-          >
-            <View style={{ flex: 1, gap: 3 }}>
-              {user?.fullName ? (
-                <AppText variant="caption" color="textTertiary" numberOfLines={1}>
-                  {t(greetingKey())}, {user.fullName.split(' ')[0]}
-                </AppText>
-              ) : null}
-              <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
-                <AppText variant="title" numberOfLines={1} style={{ flexShrink: 1 }}>
-                  {selected?.displayName ?? t('vehicle.addNew')}
-                </AppText>
-                {selected ? <PlateBadge plateNumber={selected.plateNumber} size="sm" /> : null}
-              </View>
-            </View>
-            <ChevronDown size={18} color={colors.textSecondary} strokeWidth={2.4} />
-          </PressableScale>
-
-          <View>
-            <IconButton
-              icon={<Bell size={20} color={colors.text} strokeWidth={2.2} />}
-              onPress={() => router.push('/notifications')}
-              accessibilityLabel={t('notifications.title')}
-            />
-            {unreadCount > 0 ? (
-              <View
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  top: 2,
-                  right: 2,
-                  minWidth: 18,
-                  height: 18,
-                  paddingHorizontal: 4,
-                  borderRadius: 9,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.danger,
-                  borderWidth: 2,
-                  borderColor: colors.surface,
-                }}
-              >
-                <AppText variant="caption" numeric style={{ color: colors.textOnColor, fontSize: 10 }}>
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </AppText>
-              </View>
-            ) : null}
-          </View>
-        </View>
-
-        <SearchField
-          value={search}
-          onChangeText={setSearch}
-          placeholder={t('map.search')}
-          style={shadow.md}
-          testID="map-search"
-        />
-
-        {landmark && mapLandmark ? (
-          <Card
-            tone="plain"
-            padding="md"
-            style={[{ flexDirection: row, alignItems: 'center', gap: spacing.md }, shadow.sm]}
-          >
-            <MapPin size={20} color={colors.info} strokeWidth={2.2} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <AppText variant="title" numberOfLines={1}>
-                {t('map.nearLandmark', { name: mapLandmark.name })}
-              </AppText>
-              <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-                {t('map.nearLandmarkBody')}
-              </AppText>
-            </View>
-            <IconButton
-              icon={<X size={18} color={colors.textSecondary} strokeWidth={2.2} />}
-              onPress={() => setSearch('')}
-              accessibilityLabel={t('map.clearSearch')}
-              size={36}
-            />
-          </Card>
-        ) : topAlert ? (
-          <Card
-            tone="plain"
-            padding="md"
-            onPress={() => router.push('/roads')}
-            accessibilityLabel={t('roads.title')}
-            style={[{ flexDirection: row, alignItems: 'center', gap: spacing.md }, shadow.sm]}
-          >
-            <TriangleAlert
-              size={20}
-              color={topAlert.status === 'closed' ? colors.danger : colors.warning}
-              strokeWidth={2.2}
-            />
-            <View style={{ flex: 1, gap: 2 }}>
-              <AppText variant="title">{t('roads.banner', { count: alerts.length })}</AppText>
-              <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-                {t('roads.bannerBody', {
-                  name: locale === 'ar' ? topAlert.nameAr : topAlert.nameEn,
-                  status: t(`roads.status.${topAlert.status}` as const),
-                  minutes: topAlert.minutesSinceReport ?? 0,
-                })}
-              </AppText>
-            </View>
-          </Card>
-        ) : null}
-
-        {locationStatus === 'denied' ? (
-          <Reveal>
-            <Card tone="plain" padding="md" style={[shadow.sm, { marginEnd: 56 }]}>
-              <AppText variant="title">{t('map.locationDenied')}</AppText>
-              <AppText variant="bodySm" color="textSecondary">
-                {t('map.locationDeniedBody')}
-              </AppText>
-            </Card>
-          </Reveal>
-        ) : null}
-      </View>
-
-      {/* ---- Map side controls ------------------------------------------ */}
       <View
         pointerEvents="box-none"
         style={{
-          position: 'absolute',
-          top: insets.top + 150 + (hasHeaderCard ? HEADER_CARD_HEIGHT : 0),
-          [locale === 'ar' ? 'left' : 'right']: screenPadding,
-          gap: spacing.sm,
+          paddingTop: insets.top + spacing.sm,
+          paddingHorizontal: screenPadding,
         }}
       >
-        <IconButton
-          icon={<LocateFixed size={20} color={colors.text} strokeWidth={2.2} />}
-          onPress={recenter}
-          accessibilityLabel={t('map.recenter')}
-        />
-        <IconButton
-          icon={<QrCode size={20} color={colors.text} strokeWidth={2.2} />}
-          onPress={() => {
-            haptics.light();
-            router.push('/scan');
+        <MapTopBar
+          vehicle={selected}
+          unreadCount={unreadCount}
+          search={search}
+          onSearchChange={(value) => {
+            setSearch(value);
+            setEntryMenuOpen(false);
+            setRouteZone(undefined);
+            setRouteDetailsExpanded(false);
           }}
-          accessibilityLabel={t('map.scanQr')}
-        />
-        <IconButton
-          icon={<Hash size={20} color={colors.text} strokeWidth={2.2} />}
-          onPress={() => {
-            haptics.light();
-            setCodeSheetOpen(true);
-          }}
-          accessibilityLabel={t('map.enterCode')}
+          onOpenVehicles={() => setVehicleSheetOpen(true)}
+          onOpenNotifications={() => router.push('/notifications')}
         />
       </View>
 
-      {/* ---- Bottom stack: banner + nearby rail or route card ------------ */}
       <View
         pointerEvents="box-none"
         style={{
           position: 'absolute',
-          left: 0,
+          top: insets.top + CONTROL_RAIL_TOP,
+          [locale === 'ar' ? 'left' : 'right']: screenPadding,
+        }}
+      >
+        <MapControlRail
+          locationStatus={locationStatus}
+          locationMessage={locationMessage}
+          roadAlertCount={alerts.length}
+          entryOpen={entryMenuOpen}
+          onLocate={() => void recenter()}
+          onToggleEntry={() => setEntryMenuOpen((open) => !open)}
+          onScanQr={() => {
+            setEntryMenuOpen(false);
+            router.push('/scan');
+          }}
+          onEnterCode={() => {
+            setEntryMenuOpen(false);
+            setCodeSheetOpen(true);
+          }}
+          onOpenRoads={() => router.push('/roads')}
+        />
+      </View>
+
+      <View
+        pointerEvents="box-none"
+        style={{
+          position: 'absolute',
           right: 0,
           bottom: TAB_BAR_CLEARANCE + insets.bottom,
-          gap: spacing.md,
+          left: 0,
+          gap: spacing.sm,
+          paddingHorizontal: spacing.md,
         }}
       >
         {bannerSession ? (
@@ -524,114 +330,30 @@ export default function MapScreen() {
             vehicle={bannerVehicle}
             extraCount={activeSessions.length - 1}
             onPress={() => router.push(`/parking/active/${bannerSession.id}`)}
-            style={{ paddingHorizontal: screenPadding }}
           />
         ) : null}
 
         {routeZone ? (
-          <View style={{ paddingHorizontal: screenPadding }}>
-            <Card padding="lg" style={[{ gap: spacing.md }, shadow.md]}>
-              <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.md }}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <AppText variant="titleLg" numberOfLines={1}>
-                    {t('route.title', { name: zoneName(routeZone) })}
-                  </AppText>
-                  <AppText variant="caption" color="textTertiary" numberOfLines={1}>
-                    {location ? t('route.fromYou') : t('route.fromDemo')}
-                  </AppText>
-                </View>
-                <IconButton
-                  icon={<X size={18} color={colors.textSecondary} strokeWidth={2.2} />}
-                  onPress={() => setRouteZone(undefined)}
-                  accessibilityLabel={t('route.close')}
-                  size={36}
-                />
-              </View>
-
-              {route ? (
-                <>
-                  <AppText variant="h3" numeric>
-                    {t('route.summary', {
-                      minutes: Math.max(1, Math.round(route.durationSeconds / 60)),
-                      distance: formatDistance(route.distanceMeters),
-                    })}
-                  </AppText>
-                  <RouteNotes route={route} />
-                </>
-              ) : routeLoading ? (
-                <AppText variant="bodySm" color="textSecondary">
-                  {t('route.loading')}
-                </AppText>
-              ) : null}
-
-              <View style={{ flexDirection: row, gap: spacing.sm }}>
-                <AppButton
-                  label={t('route.openMaps')}
-                  variant="secondary"
-                  size="sm"
-                  style={{ flex: 1 }}
-                  onPress={() => openInMaps(routeZone)}
-                  icon={<Navigation size={16} color={colors.text} strokeWidth={2.2} />}
-                />
-                <AppButton
-                  label={t('zone.startParking')}
-                  size="sm"
-                  style={{ flex: 1 }}
-                  onPress={() => startParking(routeZone)}
-                />
-              </View>
-            </Card>
-          </View>
+          <CompactRoutePanel
+            zone={routeZone}
+            route={route}
+            loading={routeLoading}
+            detailsExpanded={routeDetailsExpanded}
+            onDetailsExpandedChange={setRouteDetailsExpanded}
+            onClose={closeRoute}
+            onOpenMaps={() => openInMaps(routeZone)}
+            onStartParking={() => startParking(routeZone)}
+          />
         ) : (
-          <View style={{ gap: spacing.sm }}>
-            <View
-              style={{
-                marginHorizontal: screenPadding,
-                paddingHorizontal: spacing.md,
-                paddingVertical: spacing.sm,
-                borderRadius: radius.md,
-                backgroundColor: colors.surface,
-                flexDirection: row,
-                alignItems: 'center',
-                gap: spacing.sm,
-              }}
-            >
-              <AppText variant="label" color="textSecondary">
-                {t('map.nearby')}
-              </AppText>
-              <AppText variant="caption" color="textTertiary" numeric>
-                {t('map.zonesFound', { count: sortedZones.length })}
-              </AppText>
-            </View>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingHorizontal: screenPadding,
-                gap: spacing.md,
-                flexDirection: row,
-              }}
-            >
-              {sortedZones.slice(0, 8).map((zone) => (
-                <ZoneCard
-                  key={zone.id}
-                  zone={zone}
-                  distanceMeters={location ? distanceMeters(location, zone.location) : undefined}
-                  onPress={() => {
-                    openZone(zone);
-                    const focused = { ...zone.location, latitudeDelta: 0.01, longitudeDelta: 0.01 };
-                    setRegion(focused);
-                    mapRef.current?.animateToRegion(focused);
-                  }}
-                />
-              ))}
-            </ScrollView>
-          </View>
+          <NearbyParkingPanel
+            zones={nearbyZones}
+            expanded={nearbyExpanded}
+            onExpandedChange={setNearbyExpanded}
+            onSelectZone={focusZone}
+          />
         )}
       </View>
 
-      {/* ---- Sheets ------------------------------------------------------ */}
       <VehicleSelectorSheet
         visible={vehicleSheetOpen}
         onClose={() => setVehicleSheetOpen(false)}
@@ -653,7 +375,7 @@ export default function MapScreen() {
         visible={Boolean(selectedZone)}
         onClose={() => setSelectedZone(undefined)}
         distanceMeters={
-          location && selectedZone ? distanceMeters(location, selectedZone.location) : undefined
+          selectedZone ? distanceMeters(nearbyOrigin, selectedZone.location) : undefined
         }
         onNavigate={showRoute}
         onStartParking={startParking}

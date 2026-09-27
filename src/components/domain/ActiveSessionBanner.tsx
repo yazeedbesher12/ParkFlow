@@ -10,7 +10,6 @@ import Animated, {
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 
 import { AppText, MoneyText, PressableScale, Reveal } from '@/components/ui';
-import { PlateBadge } from './PlateBadge';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
@@ -102,54 +101,41 @@ export function ActiveSessionBanner({
         accessibilityLabel={`${t('parking.active')}, ${primaryTime}`}
         style={[
           {
+            minHeight: 52,
             flexDirection: row,
             alignItems: 'center',
-            gap: spacing.md,
-            paddingVertical: spacing.md,
-            paddingHorizontal: spacing.lg,
-            borderRadius: radius.xl,
+            gap: spacing.sm,
+            paddingVertical: spacing.sm,
+            paddingHorizontal: spacing.md,
+            borderRadius: radius.lg,
             backgroundColor: isOverstay ? colors.dangerDeep : colors.deep,
           },
-          shadow.lg,
+          shadow.md,
         ]}
       >
         <LivePulse color={colors.onDeep} />
 
-        <View style={{ flex: 1, gap: 3 }}>
-          <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
-            <AppText
-              variant="overline"
-              style={{ color: colors.onDeep }}
-            >
-              {isOverstay ? t('parking.overstay') : t('parking.active')}
+        <View style={{ flex: 1, minWidth: 0, flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
+          <AppText variant="h3" color="onDeep" numeric>
+            {primaryTime}
+          </AppText>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText variant="caption" color="onDeepMuted" numberOfLines={1}>
+              {isOverstay ? t('parking.overstay') : zoneName}
             </AppText>
-            {extraCount > 0 ? (
-              <AppText variant="caption" color="onDeepMuted" numeric>
-                +{extraCount}
+            {vehicle || extraCount > 0 ? (
+              <AppText variant="caption" color="onDeepMuted" numeric numberOfLines={1}>
+                {[vehicle?.plateNumber, extraCount > 0 ? `+${extraCount}` : undefined]
+                  .filter(Boolean)
+                  .join(' · ')}
               </AppText>
             ) : null}
           </View>
-
-          <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
-            <AppText variant="h3" color="onDeep" numeric>
-              {primaryTime}
-            </AppText>
-            <AppText variant="bodySm" color="onDeepMuted" numberOfLines={1} style={{ flexShrink: 1 }}>
-              · {zoneName}
-            </AppText>
-          </View>
         </View>
 
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <MoneyText
-            value={breakdown?.cost ?? session.currentCost}
-            variant="titleLg"
-            color="onDeep"
-          />
-          {vehicle ? <PlateBadge plateNumber={vehicle.plateNumber} size="sm" tone="onDeep" /> : null}
-        </View>
+        <MoneyText value={breakdown?.cost ?? session.currentCost} variant="title" color="onDeep" />
 
-        <Chevron size={20} color={colors.onDeepMuted} strokeWidth={2.4} />
+        <Chevron size={17} color={colors.onDeepMuted} strokeWidth={2.4} />
       </PressableScale>
     </Reveal>
   );
