@@ -157,12 +157,12 @@ export function getConfiguredSpot(parkingId: string, requestedSpotId: string) {
   const geometry = templates[parkingConfig.template];
   const spot = geometry.spots.find((item) => `${parkingId}:${item.code}` === requestedSpotId);
   if (!spot) return undefined;
-  const state: DemoSpotState = parkingConfig.outOfService.includes(spot.code)
+  const state: DemoSpotState = (parkingConfig.outOfService as string[]).includes(spot.code)
     ? 'out_of_service'
-    : parkingConfig.occupied.includes(spot.code) ? 'occupied' : 'available';
-  const type: DemoSpotType = parkingConfig.accessible.includes(spot.code)
+    : (parkingConfig.occupied as string[]).includes(spot.code) ? 'occupied' : 'available';
+  const type: DemoSpotType = (parkingConfig.accessible as string[]).includes(spot.code)
     ? 'accessible'
-    : parkingConfig.ev.includes(spot.code) ? 'ev' : 'regular';
+    : (parkingConfig.ev as string[]).includes(spot.code) ? 'ev' : 'regular';
   return { ...spot, id: requestedSpotId, state, type };
 }
 

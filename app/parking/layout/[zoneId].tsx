@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View, type DimensionValue, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type DimensionValue } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ArrowRight, CarFront, RefreshCw } from 'lucide-react-native';
 import { AppButton, AppHeader, AppText, Card, ErrorState, InlineNotice, Screen, Skeleton, StatusBadge } from '@/components/ui';
@@ -112,7 +112,7 @@ function LayoutCanvas({ layout, selectedId, onSelect }: {
         <AppText variant="caption" color="textTertiary" align="center" numberOfLines={1}>{t(`parkingLayout.lane.${lane.kind}`)}</AppText>
       </View>;
     })}
-    {layout.islands.map((island) => <View key={island.id} style={{ position: 'absolute', left: pct(island.x, layout.dimensions.width), top: pct(island.y, layout.dimensions.height), width: pct(island.width, layout.dimensions.width), height: pct(island.height, layout.dimensions.height), backgroundColor: colors.brandSoft, borderColor: colors.brand, borderWidth: 1, borderRadius: radius.full }} />)}
+    {layout.islands.map((island) => <View key={island.id} style={{ position: 'absolute', left: pct(island.x, layout.dimensions.width), top: pct(island.y, layout.dimensions.height), width: pct(island.width, layout.dimensions.width), height: pct(island.height, layout.dimensions.height), backgroundColor: colors.brandSoft, borderColor: colors.brand, borderWidth: 1, borderRadius: radius.pill }} />)}
     {layout.spots.map((spot) => {
       const available = spot.state === 'available';
       const selected = selectedId === spot.id;

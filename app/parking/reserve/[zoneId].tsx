@@ -29,7 +29,7 @@ const nextHalfHour = () => Math.ceil((Date.now() + 60_000) / HALF_HOUR) * HALF_H
 
 export default function ReserveParkingScreen() {
   const router = useRouter();
-  const { zoneId } = useLocalSearchParams<{ zoneId: string }>();
+  const { zoneId, spotId, spotCode } = useLocalSearchParams<{ zoneId: string; spotId?: string; spotCode?: string }>();
   const { t, row, dateLocale, locale } = useLocale();
   const { colors } = useTheme();
   const { data: zone, isPending, isError, error, refetch } = useZone(zoneId);
@@ -56,9 +56,9 @@ export default function ReserveParkingScreen() {
   };
 
   const confirm = () => {
-    if (!zone || inPast) return;
+    if (!zone || !spotId || inPast) return;
     createReservation.mutate(
-      { zoneId: zone.id, startTime: start.toISOString(), durationMinutes },
+      { zoneId: zone.id, spotId, startTime: start.toISOString(), durationMinutes },
       {
         onSuccess: (reservation) => {
           haptics.success();
@@ -80,6 +80,7 @@ export default function ReserveParkingScreen() {
             <AppText variant="h3">{locale === 'ar' ? zone.nameAr : zone.name}</AppText>
             <AppText variant="bodySm" color="textSecondary">{zone.code} · {locale === 'ar' ? zone.cityAr : zone.city}</AppText>
             <DetailRow label={t('reservation.hourlyRate')} value={`${formatRate(zone.tariff.hourlyRate)}${t('common.perHour')}`} />
+            <DetailRow label={t('reservation.parkingSpace')} value={spotCode ?? '—'} />
             <StatusBadge
               label={zone.prototypeData ? t('reservation.demoPrice') : t('reservation.officialPrice')}
               tone={zone.prototypeData ? 'warning' : 'info'}
@@ -107,7 +108,8 @@ export default function ReserveParkingScreen() {
           <InlineNotice tone="warning" title={t('reservation.demoTitle')} body={t('reservation.demoDisclaimer')} />
           {inPast ? <AppText variant="caption" color="danger">{t('reservation.pastError')}</AppText> : null}
           {createReservation.isError ? <AppText variant="caption" color="danger">{errorMessage(createReservation.error)}</AppText> : null}
-          <AppButton label={t('reservation.confirm')} onPress={confirm} loading={createReservation.isPending} disabled={inPast} />
+          {!spotId ? <InlineNotice tone="danger" title={t('parkingLayout.selectedSpace')} body={t('parkingLayout.selectPrompt')} /> : null}
+          <AppButton label={t('reservation.confirm')} onPress={confirm} loading={createReservation.isPending} disabled={inPast || !spotId} />
         </View>
       )}
     </Screen>
