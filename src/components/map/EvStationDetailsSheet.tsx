@@ -30,6 +30,7 @@ export function EvStationDetailsSheet({ station, onClose, onRoute }: { station?:
       {rows.filter(([, value]) => Boolean(value)).map(([label, value], i) => <View key={i} style={{ gap: 2 }}>
         {label ? <AppText variant="caption" color="textSecondary">{label}</AppText> : null}<AppText>{value}</AppText>
       </View>)}
+      {station.pricingText ? <AppText variant="caption" color="textSecondary">{t('ev.pricingNote')}</AppText> : null}
       {station.connectors.length ? <AppText variant="caption" color="textSecondary">{t('ev.connector')} · {t('ev.power')}</AppText> : null}
       {station.connectors.map((c, i) => <View key={i} style={{ flexDirection: row, justifyContent: 'space-between', gap: 8 }}>
         <AppText weight="bold">{t(`ev.connector.${c.type}`)}</AppText><AppText variant="caption">{t('ev.quantity', { count: c.quantity, power: c.powerKw })}</AppText>

@@ -31,6 +31,7 @@ export interface ZoneSheetProps {
   distanceMeters?: number;
   onNavigate: (zone: ParkingZone) => void;
   onStartParking: (zone: ParkingZone) => void;
+  onReserve: (zone: ParkingZone) => void;
   /** Disables the CTA when the zone cannot be parked in right now. */
   startDisabled?: boolean;
 }
@@ -75,6 +76,7 @@ export function ZoneSheet({
   distanceMeters,
   onNavigate,
   onStartParking,
+  onReserve,
   startDisabled = false,
 }: ZoneSheetProps) {
   const { colors } = useTheme();
@@ -276,6 +278,14 @@ export function ZoneSheet({
         </View>
 
         <Divider />
+
+        <AppButton
+          label={t('reservation.reserveSpot')}
+          variant="tonal"
+          onPress={() => onReserve(zone)}
+          disabled={startDisabled}
+          testID="zone-reserve-spot"
+        />
 
         <View style={{ flexDirection: row, gap: spacing.md }}>
           <AppButton

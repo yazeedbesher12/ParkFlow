@@ -137,6 +137,14 @@ enum PermitStatus {
   pending
 }
 
+enum ParkingReservationStatus {
+  confirmed
+  cancelled
+  expired
+  checked_in
+  completed
+}
+
 model User {
   id                      String              @id @default(uuid())
   phone                   String?             @unique
@@ -174,6 +182,7 @@ model User {
   permits                 Permit[]
   audits                  AuditLog[]
   idempotencies           IdempotencyRecord[]
+  parkingReservations     ParkingReservation[]
 
   @@map("users")
 }
@@ -304,6 +313,7 @@ model ParkingZone {
   snapshots             AvailabilitySnapshot[]
   violations            Violation[]
   permits               PermitZone[]
+  reservations          ParkingReservation[]
 
   @@index([latitude, longitude])
   @@map("parking_zones")
@@ -374,6 +384,32 @@ model ParkingSession {
   @@index([userId, startedAt])
   @@index([status, endsAt])
   @@map("parking_sessions")
+}
+
+model ParkingReservation {
+  id                          String                   @id @default(uuid())
+  parkingZoneId               String
+  zone                        ParkingZone              @relation(fields: [parkingZoneId], references: [id])
+  userId                      String
+  user                        User                     @relation(fields: [userId], references: [id])
+  startTime                   DateTime
+  endTime                     DateTime
+  durationMinutes             Int
+  hourlyRateSnapshot          Int
+  estimatedTotalPriceSnapshot Int
+  currency                    String                   @default("ILS") @db.VarChar(3)
+  priceIsDemo                 Boolean                  @default(false)
+  isDemoReservation           Boolean                  @default(true)
+  status                      ParkingReservationStatus @default(confirmed)
+  publicCode                  String                   @unique @db.VarChar(32)
+  qrToken                     String                   @unique @db.VarChar(128)
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
+
+  @@index([userId, startTime])
+  @@index([status, endTime])
+  @@index([parkingZoneId, startTime])
+  @@map("parking_reservations")
 }
 
 model SessionDebt {

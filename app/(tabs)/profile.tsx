@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Award,
   Bell,
+  CalendarCheck,
   CircleHelp,
   CreditCard,
   Info,
@@ -140,6 +141,13 @@ export default function ProfileScreen() {
             leading={<MenuIcon><TriangleAlert {...iconProps} /></MenuIcon>}
             showChevron
             onPress={() => router.push('/roads')}
+          />
+          <Divider inset={52} />
+          <ListItem
+            title={t('reservation.myReservations')}
+            leading={<MenuIcon><CalendarCheck {...iconProps} /></MenuIcon>}
+            showChevron
+            onPress={() => router.push('/parking/reservations')}
           />
         </Card>
 

@@ -19,6 +19,8 @@ export const queryKeys = {
   session: (sessionId: string) => ['session', sessionId] as const,
   sessions: (userId: string, vehicleId?: string) =>
     ['sessions', userId, vehicleId ?? 'all'] as const,
+  reservations: (userId: string) => ['reservations', userId] as const,
+  reservation: (reservationId: string) => ['reservation', reservationId] as const,
 
   wallet: (userId: string) => ['wallet', userId] as const,
   paymentMethods: (userId: string) => ['payment-methods', userId] as const,

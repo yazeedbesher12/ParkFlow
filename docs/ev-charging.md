@@ -1,22 +1,22 @@
 # EV Charging
 
 ParkFlow uses PostgreSQL/Prisma, not MongoDB. EV stations follow the existing
-latitude/longitude storage pattern. This feature adds no station seed data.
-No verified charging dataset was found in the repository.
+latitude/longitude storage pattern. The repository includes the verified
+`ramallah_ev_charging_stations.json` dataset with 11 PalEV stations and 12
+installed connectors in Ramallah. It is imported explicitly and is not seed data.
 
 ## Deployment and verified ingestion
 
 From `server`, apply the existing migrations including
 `20260928010000_ev_charging` using `npm.cmd run db:migrate`, generate the client
-using `npm.cmd run db:generate`, and restart the server. These migration/import
-commands were **not** run during implementation. On Windows, stop the process
-holding the Prisma query engine before regenerating if an EPERM rename occurs.
+using `npm.cmd run db:generate`, and restart the server. On Windows, stop the
+process holding the Prisma query engine before regenerating if an EPERM rename
+occurs.
 
-Use a JSON array and, only after replacing every template value with independently
-verified information, import from `server` with:
+Import the verified Ramallah dataset from `server` with:
 
 ```powershell
-npx.cmd tsx prisma/importEvStations.ts verified-stations.json
+npx.cmd tsx prisma/importEvStations.ts ..\ramallah_ev_charging_stations.json
 ```
 
 The following is a valid JSON **insertion template, not an actual station**.
@@ -49,7 +49,9 @@ sourceUrl. Optional fields should be omitted if unknown, not filled with empty
 strings. Phone must contain 7–15 digits, at most 32 characters, start/end with a digit (optional leading
 `+`), and contain only digits, spaces, parentheses or hyphens. Source URLs must
 be HTTP(S) without embedded credentials. sourceName and lastVerifiedAt are required
-for ingestion, and verification dates cannot be in the future.
+for ingestion, and verification dates cannot be in the future. The Ramallah
+dataset's `1.80 NIS per minute` pricing text is an estimate; the station details
+tell users to confirm the current price with PalEV before charging.
 
 Connector types: type_2, ccs_2, chademo, gb_t, type_1, other. Power: >0 and <=1000
 kW. Quantity: positive integer <=10000. Up to 40 connector entries. Operational
@@ -108,8 +110,7 @@ the centered Leaflet Web shell use the EV bolt marker and existing BottomSheet.
 
 1. Start the migrated server and app. In Layers, check EV is enabled without
    Coming soon, select it, and confirm parking markers and nearby parking panel
-   disappear. With no imported data, confirm the verified-stations empty state
-   and Retry; move the map, check loading, and zoom far out for the zoom-in hint.
+   disappear. Move the map, check loading, and zoom far out for the zoom-in hint.
 2. Toggle Road Reports off/on: EV stays selected, its markers remain unchanged,
    and the layer badge changes between 1 and 2. Verify report creation, details,
    duplicate handling and voting remain functional. Disabled categories/offers

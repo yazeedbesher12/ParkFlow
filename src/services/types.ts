@@ -12,6 +12,7 @@ import type {
   ParkingEntryMethod,
   ParkingFacility,
   ParkingMode,
+  ParkingReservation,
   ParkingSession,
   ParkingZone,
   PaymentMethod,
@@ -121,6 +122,12 @@ export interface ParkingService {
   listSessions(input: { userId: string; vehicleId?: string; limit?: number }): Promise<
     ParkingSession[]
   >;
+
+  createReservation(input: import('@/types').CreateParkingReservationInput): Promise<ParkingReservation>;
+  listReservations(): Promise<ParkingReservation[]>;
+  getReservation(reservationId: string): Promise<ParkingReservation>;
+  cancelReservation(reservationId: string): Promise<ParkingReservation>;
+  validateReservationQr(token: string): Promise<import('@/types').QrValidationResult>;
 }
 
 export interface WalletService {

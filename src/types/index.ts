@@ -11,3 +11,4 @@ export * from './ramallahParking';
 export * from './mapLayers';
 export * from './evStation';
 export * from './routeDestination';
+export * from './reservation';

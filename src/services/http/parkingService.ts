@@ -55,4 +55,9 @@ export const httpParkingService: ParkingService = {
     )[0];
   },
   listSessions: ({ userId, ...options }) => api('/parking/sessions' + query(options)),
+  createReservation: (body) => mutation('/parking/reservations', body),
+  listReservations: () => api('/parking/reservations'),
+  getReservation: (id) => api(`/parking/reservations/${segment(id)}`),
+  cancelReservation: (id) => mutation(`/parking/reservations/${segment(id)}/cancel`),
+  validateReservationQr: (token) => mutation('/parking/reservations/qr/validate', { token }),
 };

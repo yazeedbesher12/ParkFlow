@@ -41,6 +41,7 @@ import { distanceMeters } from '@/utils/geo';
 import { assessRouteAlternatives } from '@/utils/routeImpact';
 import { haptics } from '@/utils/haptics';
 import { useMapLayersStore } from '@/store/mapLayersStore';
+import { useReservationRouteStore } from '@/store/reservationRouteStore';
 import {
   ramallahParkingLocations,
   ramallahParkingZoneIds,
@@ -91,6 +92,7 @@ export default function MapScreen() {
   const [layersSheetOpen, setLayersSheetOpen] = useState(false);
 
   const primaryMapCategory = useMapLayersStore((state) => state.primaryCategory);
+  const pendingReservationRouteZoneId = useReservationRouteStore((state) => state.pendingZoneId);
   const evActive = primaryMapCategory === 'ev_charging';
   const ev = useEvStations(evActive, region);
   useEffect(() => { if (!evActive) setEvFiltersOpen(false); }, [evActive]);
@@ -309,6 +311,14 @@ export default function MapScreen() {
     [router],
   );
 
+  const reserveParking = useCallback(
+    (zone: ParkingZone) => {
+      setSelectedZoneId(undefined);
+      router.push({ pathname: '/parking/reserve/[zoneId]', params: { zoneId: zone.id } });
+    },
+    [router],
+  );
+
   const showRoute = useCallback(
     async (destination: RouteDestination) => {
       setLocationMessage(undefined);
@@ -334,6 +344,15 @@ export default function MapScreen() {
     },
     [location, requestLocation, t, testLocation, testLocationMode, ev.select],
   );
+
+  useEffect(() => {
+    if (!pendingReservationRouteZoneId) return;
+    const zone = zones.find((item) => item.id === pendingReservationRouteZoneId)
+      ?? ramallahParkingZones.find((item) => item.id === pendingReservationRouteZoneId);
+    if (!zone) return;
+    useReservationRouteStore.getState().consume();
+    void showRoute(parkingDestination(zone));
+  }, [pendingReservationRouteZoneId, showRoute, zones]);
 
   const openParkingLocation = useCallback((parkingLocation: RamallahParkingLocation) => {
     const zone =
@@ -667,6 +686,7 @@ export default function MapScreen() {
         }
         onNavigate={(zone) => void showRoute(parkingDestination(zone))}
         onStartParking={startParking}
+        onReserve={reserveParking}
         startDisabled={selectedZone?.parkingAllowed === false}
       />
 

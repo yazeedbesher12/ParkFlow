@@ -99,7 +99,16 @@ function settle(db: MockDatabase, session: ParkingSession, amount: number): bool
   return true;
 }
 
-export const mockParkingService: ParkingService = {
+type LegacyMockParkingService = Omit<
+  ParkingService,
+  | 'createReservation'
+  | 'listReservations'
+  | 'getReservation'
+  | 'cancelReservation'
+  | 'validateReservationQr'
+>;
+
+export const mockParkingService: LegacyMockParkingService = {
   async listZones(query) {
     await networkDelay(200, 480);
     let zones = [...ZONES];
