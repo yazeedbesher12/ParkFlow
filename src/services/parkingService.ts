@@ -158,6 +158,10 @@ export const mockParkingService: ParkingService = {
 
     const zone = zoneOrThrow(input.zoneId);
 
+    if (zone.parkingAllowed === false) {
+      throw new AppError('conflict', 'This location is not available for normal public parking');
+    }
+
     if (!zone.supportedModes.includes(input.mode)) {
       throw new AppError('validation', 'This zone does not support that parking mode');
     }

@@ -1,6 +1,13 @@
 import type { GeoPoint } from './common';
+import type {
+  AvailabilityLevel,
+  OperatingHours,
+  ParkingEntryMethod,
+  ParkingMode,
+  ParkingOwnership,
+} from './parking';
 
-export type RamallahParkingOwnership = 'municipal' | 'public' | 'private' | 'public_transport';
+export type RamallahParkingOwnership = ParkingOwnership;
 
 export type RamallahParkingPriceStatus =
   | 'demo_estimate'
@@ -38,8 +45,15 @@ export interface RamallahParkingLocation {
   location: GeoPoint;
   capacity?: number;
   price: RamallahParkingPrice;
-  availability: 'unknown';
+  maxStayMinutes: number | null;
+  operatingHours: OperatingHours[];
+  availability: AvailabilityLevel;
+  supportedModes: ParkingMode[];
+  defaultMode: ParkingMode;
+  supportedEntryMethods: ParkingEntryMethod[];
+  parkingAllowed: boolean;
   accessRestriction?: string;
+  accessRestrictionAr?: string;
   locationSource: {
     provider: string;
     url: string;

@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { Navigation, Clock, Timer, Building2, CircleParking, Users } from 'lucide-react-native';
+import {
+  Navigation,
+  Clock,
+  Timer,
+  Building2,
+  CircleParking,
+  Users,
+  TriangleAlert,
+  Info,
+} from 'lucide-react-native';
 
 import { AppButton, AppText, BottomSheet, Divider, StatusBadge } from '@/components/ui';
 import { availabilityTone } from '@/components/map/ZoneMarker';
@@ -11,7 +20,7 @@ import { useLocale } from '@/hooks/useLocale';
 import { useReportZone } from '@/hooks/useCommunity';
 import type { ParkingZone, ReportedAvailability } from '@/types';
 import { formatRate } from '@/utils/money';
-import { formatClockRange, formatDurationShort } from '@/utils/time';
+import { formatClockRange, formatDurationShort, isWithinOperatingHours } from '@/utils/time';
 import { formatDistance } from '@/utils/geo';
 
 export interface ZoneSheetProps {
@@ -85,12 +94,17 @@ export function ZoneSheet({
   }
 
   const today = zone.operatingHours.find((h) => h.weekday === new Date().getDay());
-  const isClosedToday = today?.closed ?? false;
+  const isOpenNow = isWithinOperatingHours(zone.operatingHours);
   const isGarage = zone.kind === 'garage' || zone.kind === 'private';
   const name = locale === 'ar' ? zone.nameAr : zone.name;
   const city = locale === 'ar' ? zone.cityAr : zone.city;
 
   const availabilityLabel = t(`zone.${zone.availability}` as const);
+  const ownershipLabel = zone.ownership
+    ? t(`ramallahParking.ownership.${zone.ownership}` as const)
+    : undefined;
+  const restriction =
+    locale === 'ar' ? zone.accessRestrictionAr ?? zone.accessRestriction : zone.accessRestriction;
 
   const sendReport = (availability: ReportedAvailability) =>
     reportZone.mutate(
@@ -124,17 +138,19 @@ export function ZoneSheet({
               {name}
             </AppText>
             <AppText variant="bodySm" color="textSecondary">
-              {t(`zone.kind.${zone.kind}` as const)} · {zone.code} · {city}
+              {[t(`zone.kind.${zone.kind}` as const), ownershipLabel, zone.code, city]
+                .filter(Boolean)
+                .join(' · ')}
             </AppText>
           </View>
         </View>
 
         <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
           <StatusBadge label={availabilityLabel} tone={availabilityTone(zone.availability)} />
-          {isClosedToday ? (
-            <StatusBadge label={t('zone.freeNow')} tone="info" showDot={false} />
-          ) : (
+          {isOpenNow ? (
             <StatusBadge label={t('zone.openNow')} tone="neutral" showDot={false} />
+          ) : (
+            <StatusBadge label={t('zone.closedNow')} tone="info" showDot={false} />
           )}
           {distanceMeters != null ? (
             <AppText variant="bodySm" color="textTertiary">
@@ -152,6 +168,33 @@ export function ZoneSheet({
                 minutes: zone.crowd.minutesSinceReport,
                 count: zone.crowd.reportCount,
               })}
+            </AppText>
+          </View>
+        ) : null}
+
+        {restriction ? (
+          <View
+            style={{
+              flexDirection: row,
+              alignItems: 'flex-start',
+              gap: spacing.sm,
+              padding: spacing.sm,
+              borderRadius: radius.md,
+              backgroundColor: colors.warningSoft,
+            }}
+          >
+            <TriangleAlert size={16} color={colors.warningText} strokeWidth={2.3} />
+            <AppText variant="caption" color="warningText" style={{ flex: 1 }}>
+              {restriction}
+            </AppText>
+          </View>
+        ) : null}
+
+        {zone.prototypeData ? (
+          <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
+            <Info size={14} color={colors.textTertiary} strokeWidth={2.2} />
+            <AppText variant="caption" color="textTertiary" style={{ flex: 1 }}>
+              {t('zone.prototypeData')}
             </AppText>
           </View>
         ) : null}
@@ -194,7 +237,7 @@ export function ZoneSheet({
             <AppText variant="title" numeric>
               {today && !today.closed
                 ? formatClockRange(today.opensAt, today.closesAt, dateLocale)
-                : t('zone.freeNow')}
+                : t('zone.closedNow')}
             </AppText>
           </View>
         </View>
@@ -225,6 +268,11 @@ export function ZoneSheet({
                 : t('zone.reportThanks')}
             </AppText>
           ) : null}
+          {reportZone.isError ? (
+            <AppText variant="caption" color="warningText">
+              {t('zone.reportFailed')}
+            </AppText>
+          ) : null}
         </View>
 
         <Divider />
@@ -240,7 +288,7 @@ export function ZoneSheet({
           <AppButton
             label={t('zone.startParking')}
             onPress={() => onStartParking(zone)}
-            disabled={startDisabled || (zone.crowd?.baseAvailability ?? zone.availability) === 'full'}
+            disabled={startDisabled || zone.availability === 'full'}
             style={{ flex: 1.35 }}
             testID="zone-start-parking"
           />

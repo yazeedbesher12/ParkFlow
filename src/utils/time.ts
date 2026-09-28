@@ -92,3 +92,21 @@ export function formatClockRange(opensAt: string, closesAt: string, locale = 'en
   };
   return `${fmt(opensAt)} – ${fmt(closesAt)}`;
 }
+
+const clockMinutes = (value: string): number => {
+  const [hours = '0', minutes = '0'] = value.split(':');
+  return Number(hours) * 60 + Number(minutes);
+};
+
+/** True only while the current weekday's configured opening window is active. */
+export function isWithinOperatingHours(
+  hours: { weekday: number; opensAt: string; closesAt: string; closed?: boolean }[],
+  at = new Date(),
+): boolean {
+  const today = hours.find((entry) => entry.weekday === at.getDay());
+  if (!today || today.closed) return false;
+  const now = at.getHours() * 60 + at.getMinutes();
+  const opens = clockMinutes(today.opensAt);
+  const closes = clockMinutes(today.closesAt);
+  return closes >= opens ? now >= opens && now <= closes : now >= opens || now <= closes;
+}

@@ -197,6 +197,18 @@ export default function StartParkingScreen() {
             />
           ) : null}
 
+          {zone.parkingAllowed === false && zone.accessRestriction ? (
+            <InlineNotice
+              tone="warning"
+              title={t('zone.restrictedAccess')}
+              body={
+                locale === 'ar'
+                  ? zone.accessRestrictionAr ?? zone.accessRestriction
+                  : zone.accessRestriction
+              }
+            />
+          ) : null}
+
           {/* ---- Location --------------------------------------------- */}
           <Card padding="lg" style={{ gap: spacing.md }}>
             <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.md }}>
@@ -236,7 +248,7 @@ export default function StartParkingScreen() {
               value={
                 today && !today.closed
                   ? formatClockRange(today.opensAt, today.closesAt, dateLocale)
-                  : t('zone.freeNow')
+                  : t('zone.closedNow')
               }
             />
             <DetailRow
@@ -403,8 +415,8 @@ export default function StartParkingScreen() {
               !selected ||
               Boolean(clashingSession) ||
               insufficient ||
-              // Driver reports inform, they never block — only the operator's own level does.
-              (zone.crowd?.baseAvailability ?? zone.availability) === 'full'
+              zone.parkingAllowed === false ||
+              zone.availability === 'full'
             }
             testID="start-parking-cta"
           />

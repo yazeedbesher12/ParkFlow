@@ -263,6 +263,9 @@ export const ar: Partial<Translations> = {
   'zone.kind.garage': 'كراج',
   'zone.kind.lot': 'ساحة وقوف',
   'zone.kind.private': 'وقوف خاص',
+  'zone.prototypeData': 'ساعات العمل والتوفر تجريبية — يرجى التحقق في الموقع.',
+  'zone.reportFailed': 'تعذر إرسال البلاغ. حاول مرة أخرى.',
+  'zone.restrictedAccess': 'دخول مقيّد',
 
   'parking.details': 'تفاصيل الوقوف',
   'parking.vehicle': 'المركبة',

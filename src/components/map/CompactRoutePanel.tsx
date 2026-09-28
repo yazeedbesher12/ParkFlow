@@ -61,6 +61,7 @@ interface CompactRoutePanelProps {
   onClose: () => void;
   onOpenMaps: () => void;
   onStartParking: () => void;
+  startDisabled?: boolean;
 }
 
 export function CompactRoutePanel({
@@ -72,6 +73,7 @@ export function CompactRoutePanel({
   onClose,
   onOpenMaps,
   onStartParking,
+  startDisabled = false,
 }: CompactRoutePanelProps) {
   const { colors } = useTheme();
   const { t, locale, row } = useLocale();
@@ -138,7 +140,13 @@ export function CompactRoutePanel({
           onPress={onOpenMaps}
           icon={<Navigation size={15} color={colors.text} strokeWidth={2.2} />}
         />
-        <AppButton label={t('zone.startParking')} size="sm" style={{ flex: 1 }} onPress={onStartParking} />
+        <AppButton
+          label={t('zone.startParking')}
+          size="sm"
+          style={{ flex: 1 }}
+          onPress={onStartParking}
+          disabled={startDisabled || zone.availability === 'full'}
+        />
       </View>
     </View>
   );

@@ -154,6 +154,9 @@ export const en = {
   'zone.kind.garage': 'Garage',
   'zone.kind.lot': 'Parking lot',
   'zone.kind.private': 'Private parking',
+  'zone.prototypeData': 'Prototype hours and availability — verify on site.',
+  'zone.reportFailed': 'Could not send your report. Please try again.',
+  'zone.restrictedAccess': 'Restricted access',
 
   'parking.details': 'Parking Details',
   'parking.vehicle': 'Vehicle',

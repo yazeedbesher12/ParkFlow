@@ -8,6 +8,8 @@ export type AvailabilityLevel = 'available' | 'limited' | 'full' | 'unknown';
 
 export type ParkingKind = 'street' | 'garage' | 'lot' | 'private';
 
+export type ParkingOwnership = 'municipal' | 'public' | 'private' | 'public_transport';
+
 /** How the driver identified the zone. Never assume GPS is the only entry path. */
 export type ParkingEntryMethod = 'gps' | 'qr' | 'zone_code' | 'anpr' | 'manual';
 
@@ -60,6 +62,14 @@ export interface ParkingZone {
   capacity?: number;
   facilityId?: ID;
   operatorName?: string;
+  /** Optional facility metadata used by collected off-street locations. */
+  ownership?: ParkingOwnership;
+  accessRestriction?: string;
+  accessRestrictionAr?: string;
+  /** False for facilities that are visible/routable but not open to normal public parking. */
+  parkingAllowed?: boolean;
+  /** Marks temporary prototype metadata that must be verified before production use. */
+  prototypeData?: boolean;
   supportedEntryMethods: ParkingEntryMethod[];
   updatedAt: ISODateString;
   /** Recent driver reports; when present, `availability` reflects them. */

@@ -244,6 +244,11 @@ model ParkingZone {
   latitude              Float
   longitude             Float
   kind                  String
+  ownership             String?
+  accessRestriction     String?
+  accessRestrictionAr   String?
+  parkingAllowed        Boolean                @default(true)
+  prototypeData         Boolean                @default(false)
   capacity              Int?
   active                Boolean                @default(true)
   defaultMode           ParkingMode

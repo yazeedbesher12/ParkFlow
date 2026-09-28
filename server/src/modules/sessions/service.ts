@@ -16,6 +16,7 @@ export async function start(userId:string,input:Start,key:string){return idempot
  assert(!await tx.parkingSession.findFirst({where:{vehicleId:input.vehicleId,status:'ACTIVE'}}),'ACTIVE_SESSION_EXISTS','This vehicle already has an active parking session',409);
  const now=new Date();const zone=requireValue(await tx.parkingZone.findFirst({where:{id:input.zoneId,active:true},include:{operatingHours:true,tariffs:{where:{validFrom:{lte:now},OR:[{validTo:null},{validTo:{gt:now}}]},orderBy:{validFrom:'desc'},take:1}}}));
  const tariff=requireValue(zone.tariffs[0],'No current tariff configured');
+ assert(zone.parkingAllowed,'PARKING_RESTRICTED','This location is not available for normal public parking',409);
  assert(zone.supportedModes.includes(input.mode),'INVALID_MODE','This parking mode is not supported');
  assert(zone.supportedEntryMethods.includes(input.entryMethod),'INVALID_ENTRY_METHOD','This entry method is not supported');
  const duration=input.durationMinutes;

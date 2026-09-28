@@ -1,4 +1,5 @@
 import type { OperatingHours, ParkingFacility, ParkingZone, Tariff } from '@/types';
+import { ramallahParkingZones } from '@/data/ramallahParking';
 
 /**
  * Static parking catalogue for the demo, centred on Ramallah / Al-Bireh.
@@ -63,7 +64,7 @@ export const FACILITIES: ParkingFacility[] = [
   },
 ];
 
-export const ZONES: ParkingZone[] = [
+const LEGACY_ZONES: ParkingZone[] = [
   {
     id: 'zone_irsal',
     code: 'RML-023',
@@ -255,5 +256,7 @@ export const ZONES: ParkingZone[] = [
     updatedAt: EPOCH,
   },
 ];
+
+export const ZONES: ParkingZone[] = [...LEGACY_ZONES, ...ramallahParkingZones];
 
 export const findZone = (id: string): ParkingZone | undefined => ZONES.find((z) => z.id === id);
