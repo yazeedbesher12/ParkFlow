@@ -24,6 +24,15 @@ export function useZone(zoneId?: string) {
   });
 }
 
+export function useParkingLayout(parkingId?: string) {
+  return useQuery({
+    queryKey: queryKeys.parkingLayout(parkingId ?? ''),
+    queryFn: () => services.parking.getLayout(parkingId!),
+    enabled: Boolean(parkingId),
+    staleTime: Infinity,
+  });
+}
+
 /**
  * Every vehicle may have its own live session, so this is always a list.
  * Refetched on focus and app resume so a session that ended elsewhere (ANPR

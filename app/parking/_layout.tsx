@@ -18,6 +18,7 @@ export default function ParkingLayout() {
       <Stack.Screen name="active/[id]" options={{ gestureEnabled: true }} />
       <Stack.Screen name="receipt/[id]" options={{ gestureEnabled: false, animation: 'fade' }} />
       <Stack.Screen name="reserve/[zoneId]" options={{ animation: 'slide_from_bottom' }} />
+      <Stack.Screen name="layout/[zoneId]" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="reservation/[id]" />
       <Stack.Screen name="reservations/index" />
     </Stack>

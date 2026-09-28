@@ -313,8 +313,14 @@ export default function MapScreen() {
 
   const reserveParking = useCallback(
     (zone: ParkingZone) => {
-      setSelectedZoneId(undefined);
-      router.push({ pathname: '/parking/reserve/[zoneId]', params: { zoneId: zone.id } });
+      router.push({ pathname: '/parking/layout/[zoneId]', params: { zoneId: zone.id } });
+    },
+    [router],
+  );
+
+  const viewParkingMap = useCallback(
+    (zone: ParkingZone) => {
+      router.push({ pathname: '/parking/layout/[zoneId]', params: { zoneId: zone.id } });
     },
     [router],
   );
@@ -687,6 +693,7 @@ export default function MapScreen() {
         onNavigate={(zone) => void showRoute(parkingDestination(zone))}
         onStartParking={startParking}
         onReserve={reserveParking}
+        onViewParkingMap={viewParkingMap}
         startDisabled={selectedZone?.parkingAllowed === false}
       />
 

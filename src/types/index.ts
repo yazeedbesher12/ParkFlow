@@ -12,3 +12,4 @@ export * from './mapLayers';
 export * from './evStation';
 export * from './routeDestination';
 export * from './reservation';
+export * from './parkingLayout';

@@ -9,6 +9,7 @@ import {
   Users,
   TriangleAlert,
   Info,
+  Map,
 } from 'lucide-react-native';
 
 import { AppButton, AppText, BottomSheet, Divider, StatusBadge } from '@/components/ui';
@@ -32,6 +33,7 @@ export interface ZoneSheetProps {
   onNavigate: (zone: ParkingZone) => void;
   onStartParking: (zone: ParkingZone) => void;
   onReserve: (zone: ParkingZone) => void;
+  onViewParkingMap: (zone: ParkingZone) => void;
   /** Disables the CTA when the zone cannot be parked in right now. */
   startDisabled?: boolean;
 }
@@ -77,6 +79,7 @@ export function ZoneSheet({
   onNavigate,
   onStartParking,
   onReserve,
+  onViewParkingMap,
   startDisabled = false,
 }: ZoneSheetProps) {
   const { colors } = useTheme();
@@ -278,6 +281,14 @@ export function ZoneSheet({
         </View>
 
         <Divider />
+
+        <AppButton
+          label={t('parkingLayout.viewMap')}
+          variant="secondary"
+          icon={<Map size={18} color={colors.text} strokeWidth={2.2} />}
+          onPress={() => onViewParkingMap(zone)}
+          testID="zone-view-parking-map"
+        />
 
         <AppButton
           label={t('reservation.reserveSpot')}

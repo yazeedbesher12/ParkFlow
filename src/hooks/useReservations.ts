@@ -23,9 +23,10 @@ export function useReservation(reservationId?: string) {
 
 function useReservationInvalidation() {
   const queryClient = useQueryClient();
-  return (id?: string) => {
+  return (id?: string, parkingId?: string) => {
     void queryClient.invalidateQueries({ queryKey: ['reservations'] });
     if (id) void queryClient.invalidateQueries({ queryKey: queryKeys.reservation(id) });
+    if (parkingId) void queryClient.invalidateQueries({ queryKey: queryKeys.parkingLayout(parkingId) });
   };
 }
 
@@ -33,7 +34,7 @@ export function useCreateReservation() {
   const invalidate = useReservationInvalidation();
   return useMutation({
     mutationFn: (input: CreateParkingReservationInput) => services.parking.createReservation(input),
-    onSuccess: (reservation) => invalidate(reservation.id),
+    onSuccess: (reservation) => invalidate(reservation.id, reservation.parkingZoneId),
   });
 }
 
@@ -41,6 +42,6 @@ export function useCancelReservation() {
   const invalidate = useReservationInvalidation();
   return useMutation({
     mutationFn: (reservationId: string) => services.parking.cancelReservation(reservationId),
-    onSuccess: (reservation) => invalidate(reservation.id),
+    onSuccess: (reservation) => invalidate(reservation.id, reservation.parkingZoneId),
   });
 }

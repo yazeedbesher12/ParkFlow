@@ -392,6 +392,7 @@ model ParkingReservation {
   zone                        ParkingZone              @relation(fields: [parkingZoneId], references: [id])
   userId                      String
   user                        User                     @relation(fields: [userId], references: [id])
+  spotId                      String?
   startTime                   DateTime
   endTime                     DateTime
   durationMinutes             Int
@@ -409,6 +410,7 @@ model ParkingReservation {
   @@index([userId, startTime])
   @@index([status, endTime])
   @@index([parkingZoneId, startTime])
+  @@index([spotId, startTime, endTime])
   @@map("parking_reservations")
 }
 

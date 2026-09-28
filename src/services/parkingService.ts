@@ -101,6 +101,7 @@ function settle(db: MockDatabase, session: ParkingSession, amount: number): bool
 
 type LegacyMockParkingService = Omit<
   ParkingService,
+  | 'getLayout'
   | 'createReservation'
   | 'listReservations'
   | 'getReservation'

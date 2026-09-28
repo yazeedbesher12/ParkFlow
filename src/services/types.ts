@@ -109,6 +109,7 @@ export interface ParkingService {
   getZone(zoneId: string): Promise<ParkingZone>;
   getZoneByCode(code: string): Promise<ParkingZone>;
   getFacility(facilityId: string): Promise<ParkingFacility>;
+  getLayout(parkingId: string): Promise<import('@/types').ParkingLayout>;
 
   startSession(input: StartSessionInput): Promise<ParkingSession>;
   stopSession(sessionId: string): Promise<ParkingSession>;

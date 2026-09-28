@@ -14,6 +14,7 @@ export const queryKeys = {
 
   zones: (search?: string) => ['zones', search ?? ''] as const,
   zone: (zoneId: string) => ['zone', zoneId] as const,
+  parkingLayout: (parkingId: string) => ['parking-layout', parkingId] as const,
 
   activeSessions: (userId: string) => ['sessions', 'active', userId] as const,
   session: (sessionId: string) => ['session', sessionId] as const,

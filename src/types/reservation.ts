@@ -19,6 +19,8 @@ export interface ParkingReservation {
   id: ID;
   parkingZoneId: ID;
   userId: ID;
+  spotId?: ID;
+  spotCode?: string;
   startTime: ISODateString;
   endTime: ISODateString;
   durationMinutes: number;
@@ -37,6 +39,7 @@ export interface ParkingReservation {
 
 export interface CreateParkingReservationInput {
   zoneId: ID;
+  spotId: ID;
   startTime: ISODateString;
   durationMinutes: number;
 }

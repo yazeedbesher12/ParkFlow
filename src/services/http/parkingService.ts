@@ -41,6 +41,7 @@ export const httpParkingService: ParkingService = {
     return enrichCollectedZone(await api<ParkingZone>(`/parking/zones/code/${segment(code)}`));
   },
   getFacility: (id) => api(`/parking/facilities/${segment(id)}`),
+  getLayout: (id) => api(`/parking/zones/${segment(id)}/layout`),
   startSession: ({ userId, idempotencyKey, ...body }) =>
     api('/parking/sessions', { method: 'POST', body, key: idempotencyKey }),
   stopSession: (id) => mutation(`/parking/sessions/${segment(id)}/stop`),

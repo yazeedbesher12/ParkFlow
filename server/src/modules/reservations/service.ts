@@ -1,9 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import type { Prisma } from '@prisma/client';
-import { db } from '../../database/client';
+import { db, lock } from '../../database/client';
 import { assert, requireValue } from '../../utils/errors';
 import { idempotent } from '../../utils/idempotency';
 import { assertOpen } from '../parking/pricing';
+import { getConfiguredSpot } from '../parking/layouts';
 
 const include = {
   zone: { select: { id: true, code: true, name: true, nameAr: true, latitude: true, longitude: true } },
@@ -14,6 +15,7 @@ function dto(row: ReservationRow) {
   const { qrToken, zone, ...reservation } = row;
   return {
     ...reservation,
+    spotCode: row.spotId?.split(':').pop(),
     startTime: row.startTime.toISOString(),
     endTime: row.endTime.toISOString(),
     createdAt: row.createdAt.toISOString(),
@@ -45,7 +47,7 @@ async function owned(userId: string, id: string) {
 
 export async function create(
   userId: string,
-  input: { zoneId: string; startTime: string; durationMinutes: number },
+  input: { zoneId: string; spotId: string; startTime: string; durationMinutes: number },
   key: string,
 ) {
   return idempotent(userId, 'reservation:create', key, input, async (tx) => {
@@ -59,6 +61,22 @@ export async function create(
   );
   const endTime = new Date(startTime.getTime() + input.durationMinutes * 60_000);
   assert(endTime > startTime, 'INVALID_TIME_RANGE', 'End time must be after start time');
+
+  const spot = getConfiguredSpot(input.zoneId, input.spotId);
+  assert(spot, 'UNKNOWN_PARKING_SPOT', 'Parking space was not found', 404);
+  assert(spot.state !== 'out_of_service', 'SPOT_OUT_OF_SERVICE', 'This parking space is out of service', 409);
+  assert(spot.state !== 'occupied', 'SPOT_OCCUPIED', 'This demo parking space is occupied', 409);
+  await lock(tx, `parking-spot:${input.spotId}`);
+  const overlap = await tx.parkingReservation.findFirst({
+    where: {
+      spotId: input.spotId,
+      status: { in: ['confirmed', 'checked_in'] },
+      startTime: { lt: endTime },
+      endTime: { gt: startTime },
+    },
+    select: { id: true },
+  });
+  assert(!overlap, 'SPOT_ALREADY_RESERVED', 'This parking space is already reserved for that time', 409);
 
   const zone = requireValue(await tx.parkingZone.findFirst({
     where: { id: input.zoneId, active: true },
@@ -81,6 +99,7 @@ export async function create(
   const row = await tx.parkingReservation.create({
     data: {
       parkingZoneId: zone.id,
+      spotId: spot.id,
       userId,
       startTime,
       endTime,
