@@ -1,4 +1,5 @@
 import type { Services } from './types';
+import { httpEvStationService } from './http/evStationService';
 import { httpAuthService } from './http/authService';
 import { httpVehicleService } from './http/vehicleService';
 import { httpParkingService } from './http/parkingService';
@@ -8,10 +9,12 @@ import { httpViolationService } from './http/violationService';
 import { httpNotificationService } from './http/notificationService';
 import { httpProfileService } from './http/profileService';
 import { httpRoadService } from './http/roadService';
+import { httpRoadReportService } from './http/roadReportService';
 import { httpRoutingService } from './http/routingService';
 import { httpTrustService } from './http/trustService';
 
 export const services: Services = {
+  evStations: httpEvStationService,
   auth: httpAuthService,
   vehicles: httpVehicleService,
   parking: httpParkingService,
@@ -21,6 +24,7 @@ export const services: Services = {
   notifications: httpNotificationService,
   profile: httpProfileService,
   roads: httpRoadService,
+  roadReports: httpRoadReportService,
   routing: httpRoutingService,
   trust: httpTrustService,
 };

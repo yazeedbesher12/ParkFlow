@@ -5,6 +5,8 @@ import type {
   GeoRegion,
   ParkingZone,
   RamallahParkingLocation,
+  RoadReport,
+  RoadReportType,
 } from '@/types';
 
 export interface MapCheckpoint {
@@ -32,6 +34,9 @@ export interface MapLandmark {
  * so the app is fully previewable in a browser. Screens only ever see this interface.
  */
 export interface MapSurfaceProps {
+  evStations?: import('@/types').EvChargingStation[];
+  selectedEvStationId?: string;
+  onSelectEvStation?: (station: import('@/types').EvChargingStation) => void;
   region: GeoRegion;
   zones: ParkingZone[];
   selectedZoneId?: string;
@@ -47,6 +52,10 @@ export interface MapSurfaceProps {
   onRegionChangeComplete?: (region: GeoRegion) => void;
   checkpoints?: MapCheckpoint[];
   onSelectCheckpoint?: (checkpointId: string) => void;
+  roadReports?: RoadReport[];
+  selectedRoadReportId?: string;
+  onSelectRoadReport?: (report: RoadReport) => void;
+  reportDraft?: { location: GeoPoint; type: RoadReportType };
   route?: MapRoute;
   /** The place a landmark search resolved to. */
   landmark?: MapLandmark;

@@ -16,6 +16,15 @@ import { VehicleSelectorSheet } from '@/components/domain/VehicleSelectorSheet';
 import { ZoneSheet } from '@/components/domain/ZoneSheet';
 import { ActiveSessionBanner } from '@/components/domain/ActiveSessionBanner';
 import { ZoneCodeSheet } from '@/components/domain/ZoneCodeSheet';
+import { RoadReportLocationPanel } from '@/components/map/RoadReportLocationPanel';
+import { RoadReportCreationSheet, type ReportCreationStep } from '@/components/map/RoadReportCreationSheet';
+import { RoadReportDetailsSheet } from '@/components/map/RoadReportDetailsSheet';
+import { MapLayersSheet } from '@/components/map/MapLayersSheet';
+import { EvStationDetailsSheet } from '@/components/map/EvStationDetailsSheet';
+import { EvFiltersSheet } from '@/components/map/EvFiltersSheet';
+import { EvMapStatus } from '@/components/map/EvMapStatus';
+import { useEvStations } from '@/hooks/useEvStations';
+import { evDestination, parkingDestination, type EvChargingStation, type RouteDestination } from '@/types';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
@@ -25,10 +34,13 @@ import { useActiveSessions, useZones } from '@/hooks/useParking';
 import { useCheckpoints, useRoute } from '@/hooks/useCommunity';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useUserLocation } from '@/hooks/useUserLocation';
+import { useCreateRoadReport, useRoadReports } from '@/hooks/useRoadReports';
 import { DEFAULT_REGION } from '@/services';
-import type { GeoPoint, GeoRegion, ParkingZone, RamallahParkingLocation } from '@/types';
+import type { CreateRoadReportInput, GeoPoint, GeoRegion, ParkingZone, RamallahParkingLocation, RoadReport, RoadReportType, RouteResult } from '@/types';
 import { distanceMeters } from '@/utils/geo';
+import { assessRouteAlternatives } from '@/utils/routeImpact';
 import { haptics } from '@/utils/haptics';
+import { useMapLayersStore } from '@/store/mapLayersStore';
 import {
   ramallahParkingLocations,
   ramallahParkingZoneIds,
@@ -58,7 +70,9 @@ export default function MapScreen() {
   const mapRef = useRef<MapSurfaceHandle>(null);
   const [region, setRegion] = useState<GeoRegion>(DEFAULT_REGION);
   const [selectedZoneId, setSelectedZoneId] = useState<string>();
-  const [routeZone, setRouteZone] = useState<ParkingZone>();
+  const [routeTarget, setRouteTarget] = useState<RouteDestination>();
+  const routeZone = routeTarget?.type === 'parking' ? routeTarget.zone : undefined;
+  const [evFiltersOpen, setEvFiltersOpen] = useState(false);
   const [routeOriginOverride, setRouteOriginOverride] = useState<GeoPoint>();
   const [testLocationMode, setTestLocationMode] = useState(false);
   const [testLocation, setTestLocation] = useState<GeoPoint>();
@@ -67,7 +81,22 @@ export default function MapScreen() {
   const [entryMenuOpen, setEntryMenuOpen] = useState(false);
   const [nearbyExpanded, setNearbyExpanded] = useState(false);
   const [routeDetailsExpanded, setRouteDetailsExpanded] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState('current');
+  const [alternativeDismissed, setAlternativeDismissed] = useState(false);
   const [locationMessage, setLocationMessage] = useState<string>();
+  const [reportStep, setReportStep] = useState<ReportCreationStep>();
+  const [reportLocationPicking, setReportLocationPicking] = useState(false);
+  const [reportDraft, setReportDraft] = useState<Partial<CreateRoadReportInput>>({});
+  const [selectedReport, setSelectedReport] = useState<RoadReport>();
+  const [layersSheetOpen, setLayersSheetOpen] = useState(false);
+
+  const primaryMapCategory = useMapLayersStore((state) => state.primaryCategory);
+  const evActive = primaryMapCategory === 'ev_charging';
+  const ev = useEvStations(evActive, region);
+  useEffect(() => { if (!evActive) setEvFiltersOpen(false); }, [evActive]);
+  const roadReportsEnabled = useMapLayersStore((state) => state.roadReportsEnabled);
+  const businessOffersEnabled = useMapLayersStore((state) => state.businessOffersEnabled);
+  const enabledLayerCount = 1 + Number(roadReportsEnabled) + Number(businessOffersEnabled);
 
   const { vehicles, selected, select } = useSelectedVehicle();
   const { data: zones = [] } = useZones();
@@ -76,12 +105,28 @@ export default function MapScreen() {
   const { data: unreadCount = 0 } = useUnreadNotificationCount();
   // Location is deliberately opt-in: Ramallah remains the opening view until locate is pressed.
   const { location, status: locationStatus, request: requestLocation } = useUserLocation(false);
+  const reportBounds = useMemo(() => ({
+    north: round4(Math.min(90, region.latitude + region.latitudeDelta / 2)),
+    south: round4(Math.max(-90, region.latitude - region.latitudeDelta / 2)),
+    east: round4(Math.min(180, region.longitude + region.longitudeDelta / 2)),
+    west: round4(Math.max(-180, region.longitude - region.longitudeDelta / 2)),
+  }), [region]);
+  const { data: roadReports = [] } = useRoadReports(reportBounds);
+  const createReport = useCreateRoadReport();
   const selectedZone = useMemo(
     () =>
       zones.find((zone) => zone.id === selectedZoneId) ??
       ramallahParkingZones.find((zone) => zone.id === selectedZoneId),
     [selectedZoneId, zones],
   );
+
+  useEffect(() => {
+    setSelectedZoneId(undefined);
+  }, [primaryMapCategory]);
+
+  useEffect(() => {
+    if (!roadReportsEnabled) setSelectedReport(undefined);
+  }, [roadReportsEnabled]);
 
   const bannerSession = useMemo(
     () => activeSessions.find((session) => session.vehicleId === selected?.id) ?? activeSessions[0],
@@ -122,14 +167,14 @@ export default function MapScreen() {
 
   const mapCheckpoints = useMemo<MapCheckpoint[]>(
     () =>
-      alerts.map((checkpoint) => ({
+      alerts.filter((checkpoint) => !roadReports.some((report) => report.type === 'checkpoint' && distanceMeters(report, checkpoint.location) < 80)).map((checkpoint) => ({
         id: checkpoint.id,
         name: locale === 'ar' ? checkpoint.nameAr : checkpoint.nameEn,
         location: checkpoint.location,
         status: checkpoint.status,
         assumed: checkpoint.assumed,
       })),
-    [alerts, locale],
+    [alerts, locale, roadReports],
   );
 
   const routeOrigin = useMemo<GeoPoint | undefined>(
@@ -142,21 +187,57 @@ export default function MapScreen() {
     },
     [testLocation, location, routeOriginOverride],
   );
-  const routeDestination = routeZone?.location;
+  const routeDestination = routeTarget?.location;
   const { data: route, isFetching: routeLoading } = useRoute(
     routeDestination ? routeOrigin : undefined,
     routeDestination,
-    routeZone ? FASTEST_PARKING_ROUTE : undefined,
+    routeTarget ? FASTEST_PARKING_ROUTE : undefined,
   );
+  useEffect(() => {
+    setSelectedRouteId('current');
+    setAlternativeDismissed(false);
+  }, [routeTarget?.type, routeTarget?.id, routeOrigin?.latitude, routeOrigin?.longitude]);
+  useEffect(() => {
+    if (selectedRouteId !== 'current' && route && !route.alternatives.some((alternative) => alternative.id === selectedRouteId)) {
+      setSelectedRouteId('current');
+      setAlternativeDismissed(false);
+    }
+  }, [route, selectedRouteId]);
+  const routeAssessment = useMemo(
+    () => route?.source === 'osrm'
+      ? assessRouteAlternatives(route, roadReports, routeOrigin)
+      : undefined,
+    [roadReports, route, routeOrigin],
+  );
+  const selectedAlternative = useMemo(
+    () => route?.alternatives.find((alternative) => alternative.id === selectedRouteId),
+    [route, selectedRouteId],
+  );
+  const displayedRoute = useMemo<RouteResult | undefined>(() => {
+    if (!route || !selectedAlternative) return route;
+    return {
+      ...route,
+      coordinates: selectedAlternative.coordinates,
+      distanceMeters: selectedAlternative.distanceMeters,
+      durationSeconds: selectedAlternative.durationSeconds,
+      penaltySeconds: 0,
+      closuresOnRoute: [],
+    };
+  }, [route, selectedAlternative]);
+  const activeRouteAssessment = selectedRouteId === 'current'
+    ? routeAssessment?.current
+    : routeAssessment?.alternatives.find((alternative) => alternative.id === selectedRouteId);
   const mapRoute = useMemo<MapRoute | undefined>(
     () =>
-      routeDestination && route?.source === 'osrm'
+      routeDestination && displayedRoute?.source === 'osrm'
         ? {
-            coordinates: route.coordinates,
-            alternatives: route.rejected.slice(0, 2).map((item) => item.coordinates),
+            coordinates: displayedRoute.coordinates,
+            alternatives: selectedRouteId === 'current'
+              ? displayedRoute.alternatives.map((item) => item.coordinates)
+              : [route!.coordinates, ...route!.alternatives.filter((item) => item.id !== selectedRouteId).map((item) => item.coordinates)],
           }
         : undefined,
-    [route, routeDestination],
+    [displayedRoute, route, routeDestination, selectedRouteId],
   );
 
   useEffect(() => {
@@ -202,9 +283,10 @@ export default function MapScreen() {
     haptics.select();
     setEntryMenuOpen(false);
     setNearbyExpanded(false);
-    setRouteZone(undefined);
+    setRouteTarget(undefined);
     setRouteDetailsExpanded(false);
     setSelectedZoneId(zone.id);
+    setSelectedReport(undefined);
   }, []);
 
   const focusZone = useCallback(
@@ -220,7 +302,7 @@ export default function MapScreen() {
   const startParking = useCallback(
     (zone: ParkingZone) => {
       setSelectedZoneId(undefined);
-      setRouteZone(undefined);
+      setRouteTarget(undefined);
       setRouteDetailsExpanded(false);
       router.push({ pathname: '/parking/start', params: { zoneId: zone.id } });
     },
@@ -228,7 +310,7 @@ export default function MapScreen() {
   );
 
   const showRoute = useCallback(
-    async (zone: ParkingZone) => {
+    async (destination: RouteDestination) => {
       setLocationMessage(undefined);
       let origin = testLocation;
       if (!origin && testLocationMode) {
@@ -245,9 +327,12 @@ export default function MapScreen() {
       setSelectedZoneId(undefined);
       setNearbyExpanded(false);
       setRouteDetailsExpanded(false);
-      setRouteZone(zone);
+      setSelectedRouteId('current');
+      setAlternativeDismissed(false);
+      setRouteTarget(destination);
+      ev.select(undefined);
     },
-    [location, requestLocation, t, testLocation, testLocationMode],
+    [location, requestLocation, t, testLocation, testLocationMode, ev.select],
   );
 
   const openParkingLocation = useCallback((parkingLocation: RamallahParkingLocation) => {
@@ -258,8 +343,25 @@ export default function MapScreen() {
   }, [openZone, zones]);
 
   const closeRoute = useCallback(() => {
-    setRouteZone(undefined);
+    setRouteTarget(undefined);
     setRouteDetailsExpanded(false);
+    setSelectedRouteId('current');
+    setAlternativeDismissed(false);
+  }, []);
+
+  const openRouteReport = useCallback((report: RoadReport) => {
+    setSelectedZoneId(undefined);
+    setReportStep(undefined);
+    setReportLocationPicking(false);
+    setSelectedReport(report);
+    const next: GeoRegion = {
+      latitude: report.latitude,
+      longitude: report.longitude,
+      latitudeDelta: 0.008,
+      longitudeDelta: 0.008,
+    };
+    setRegion(next);
+    mapRef.current?.animateToRegion(next, 400);
   }, []);
 
   const toggleTestLocation = useCallback(() => {
@@ -277,22 +379,87 @@ export default function MapScreen() {
 
   const handleMapPress = useCallback(
     (coordinate: GeoPoint) => {
+      if (reportLocationPicking) {
+        setReportDraft((current) => ({ ...current, ...coordinate }));
+        return;
+      }
       if (!testLocationMode) return;
       setTestLocation(coordinate);
       setLocationMessage(undefined);
     },
-    [testLocationMode],
+    [reportLocationPicking, testLocationMode],
   );
 
-  const openInMaps = useCallback((zone: ParkingZone) => {
-    const { latitude, longitude } = zone.location;
+  const beginReportLocation = useCallback((type: RoadReportType) => {
+    const initial = testLocation ?? location ?? { latitude: region.latitude, longitude: region.longitude };
+    setSelectedZoneId(undefined);
+    setSelectedReport(undefined);
+    setEntryMenuOpen(false);
+    setReportDraft({ type, ...initial });
+    setReportStep(undefined);
+    setReportLocationPicking(true);
+  }, [location, region.latitude, region.longitude, testLocation]);
+
+  const cancelReport = useCallback(() => {
+    setReportStep(undefined);
+    setReportLocationPicking(false);
+    setReportDraft({});
+    createReport.reset();
+  }, [createReport]);
+
+  const submitReport = useCallback(() => {
+    if (!reportDraft.type || reportDraft.latitude === undefined || reportDraft.longitude === undefined) return;
+    createReport.mutate(reportDraft as CreateRoadReportInput, {
+      onSuccess: (result) => {
+        const report = result.report;
+        setReportStep(undefined);
+        setReportLocationPicking(false);
+        setReportDraft({});
+        setSelectedReport(undefined);
+        setSelectedReport(report);
+        if (result.duplicate) {
+          const next: GeoRegion = {
+            latitude: report.latitude,
+            longitude: report.longitude,
+            latitudeDelta: Math.min(region.latitudeDelta, 0.012),
+            longitudeDelta: Math.min(region.longitudeDelta, 0.012),
+          };
+          setRegion(next);
+          mapRef.current?.animateToRegion(next, 450);
+          setLocationMessage(t(result.confirmationAdded
+            ? 'roadReports.duplicateConfirmed'
+            : 'roadReports.duplicateActive'));
+        } else {
+          setLocationMessage(t('roadReports.created'));
+        }
+        createReport.reset();
+      },
+    });
+  }, [createReport, region.latitudeDelta, region.longitudeDelta, reportDraft, t]);
+
+  const openInMaps = useCallback((destination: RouteDestination) => {
+    const { latitude, longitude } = destination.location;
     const url = Platform.select({
       ios: `maps://?daddr=${latitude},${longitude}`,
-      android: `geo:${latitude},${longitude}?q=${latitude},${longitude}(${encodeURIComponent(zone.name)})`,
+      android: `geo:${latitude},${longitude}?q=${latitude},${longitude}(${encodeURIComponent(destination.name)})`,
       default: `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`,
     });
     void Linking.openURL(url).catch(() => undefined);
   }, []);
+
+  const selectEvStation = useCallback((station: EvChargingStation) => {
+    setSelectedZoneId(undefined);
+    setSelectedReport(undefined);
+    setReportStep(undefined);
+    setReportLocationPicking(false);
+    setEntryMenuOpen(false);
+    ev.select(station);
+  }, [ev.select]);
+
+  // Never stack the EV modal with the existing map sheets.
+  useEffect(() => {
+    if (selectedZoneId || selectedReport || reportStep || reportLocationPicking || layersSheetOpen || vehicleSheetOpen || codeSheetOpen || evFiltersOpen) ev.select(undefined);
+  }, [selectedZoneId, selectedReport, reportStep, reportLocationPicking, layersSheetOpen, vehicleSheetOpen, codeSheetOpen, evFiltersOpen, ev.select]);
 
   return (
     <View style={{ flex: 1, overflow: 'hidden', backgroundColor: colors.background }}>
@@ -301,15 +468,20 @@ export default function MapScreen() {
       <MapSurface
         ref={mapRef}
         region={region}
-        zones={mapZones.map((item) => item.zone)}
-        selectedZoneId={selectedZoneId ?? routeZone?.id}
-        parkingLocations={ramallahParkingLocations}
-        selectedParkingLocationId={selectedZoneId ?? routeZone?.id}
+        evStations={evActive ? ev.stations : []}
+        selectedEvStationId={evActive ? ev.selectedStationId : undefined}
+        onSelectEvStation={selectEvStation}
+        zones={primaryMapCategory === 'parking' ? mapZones.map((item) => item.zone) : []}
+        selectedZoneId={primaryMapCategory === 'parking' ? selectedZoneId ?? routeZone?.id : undefined}
+        parkingLocations={primaryMapCategory === 'parking' ? ramallahParkingLocations : []}
+        selectedParkingLocationId={primaryMapCategory === 'parking' ? selectedZoneId ?? routeZone?.id : undefined}
         onSelectParkingLocation={openParkingLocation}
         onSelectZone={openZone}
         onPressMap={handleMapPress}
         onPressBackground={() => {
+          ev.select(undefined);
           setSelectedZoneId(undefined);
+          setSelectedReport(undefined);
           setEntryMenuOpen(false);
         }}
         userLocation={testLocationMode ? undefined : location}
@@ -317,6 +489,16 @@ export default function MapScreen() {
         onRegionChangeComplete={setRegion}
         checkpoints={mapCheckpoints}
         onSelectCheckpoint={() => router.push('/roads')}
+        roadReports={roadReportsEnabled ? roadReports : []}
+        selectedRoadReportId={roadReportsEnabled ? selectedReport?.id : undefined}
+        onSelectRoadReport={(report) => {
+          setSelectedZoneId(undefined);
+          if (routeTarget?.type !== 'ev_station') setRouteTarget(undefined);
+          setReportStep(undefined);
+          setReportLocationPicking(false);
+          setSelectedReport(report);
+        }}
+        reportDraft={reportLocationPicking && reportDraft.type && reportDraft.latitude !== undefined && reportDraft.longitude !== undefined ? { type: reportDraft.type, location: { latitude: reportDraft.latitude, longitude: reportDraft.longitude } } : undefined}
         route={mapRoute}
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
       />
@@ -333,6 +515,14 @@ export default function MapScreen() {
           unreadCount={unreadCount}
           onOpenVehicles={() => setVehicleSheetOpen(true)}
           onOpenNotifications={() => router.push('/notifications')}
+          onOpenReport={!reportLocationPicking && !reportStep ? () => {
+            setSelectedZoneId(undefined);
+            setSelectedReport(undefined);
+            setEntryMenuOpen(false);
+            setReportDraft({});
+            createReport.reset();
+            setReportStep('type');
+          } : undefined}
         />
       </View>
 
@@ -360,6 +550,13 @@ export default function MapScreen() {
             setCodeSheetOpen(true);
           }}
           onOpenRoads={() => router.push('/roads')}
+          enabledLayerCount={enabledLayerCount}
+          onOpenLayers={() => {
+            setEntryMenuOpen(false);
+            setSelectedZoneId(undefined);
+            setSelectedReport(undefined);
+            setLayersSheetOpen(true);
+          }}
         />
       </View>
 
@@ -374,7 +571,7 @@ export default function MapScreen() {
           paddingHorizontal: spacing.md,
         }}
       >
-        {bannerSession ? (
+        {!reportLocationPicking && !reportStep && !selectedReport && bannerSession ? (
           <ActiveSessionBanner
             session={bannerSession}
             vehicle={bannerVehicle}
@@ -383,7 +580,7 @@ export default function MapScreen() {
           />
         ) : null}
 
-        {__DEV__ ? (
+        {!reportLocationPicking && !reportStep && !selectedReport && __DEV__ ? (
           <View style={{ alignItems: 'flex-end' }}>
             <TestLocationControl
               enabled={testLocationMode}
@@ -393,26 +590,54 @@ export default function MapScreen() {
           </View>
         ) : null}
 
-        {routeZone ? (
+        {reportLocationPicking ? (
+          <RoadReportLocationPanel onCancel={cancelReport} onContinue={() => { setReportLocationPicking(false); setReportStep('details'); }} />
+        ) : !reportStep && !selectedReport && routeTarget ? (
           <CompactRoutePanel
-            zone={routeZone}
-            route={route}
+            destination={routeTarget}
+            route={displayedRoute}
             loading={routeLoading}
             detailsExpanded={routeDetailsExpanded}
             onDetailsExpandedChange={setRouteDetailsExpanded}
             onClose={closeRoute}
-            onOpenMaps={() => openInMaps(routeZone)}
-            onStartParking={() => startParking(routeZone)}
-            startDisabled={routeZone.parkingAllowed === false}
+            onOpenMaps={() => openInMaps(routeTarget)}
+            onStartParking={routeZone ? () => startParking(routeZone) : undefined}
+            onOpenDestination={routeTarget.type === 'ev_station' ? () => {
+              useMapLayersStore.getState().setPrimaryCategory('ev_charging');
+              selectEvStation(routeTarget.station);
+            } : undefined}
+            startDisabled={routeZone?.parkingAllowed === false}
+            impacts={activeRouteAssessment?.impacts}
+            suggestedAlternative={routeAssessment?.recommended}
+            originalDurationSeconds={route?.durationSeconds}
+            usingAlternative={selectedRouteId !== 'current'}
+            alternativeDismissed={alternativeDismissed}
+            onSelectImpact={(impact) => openRouteReport(impact.report)}
+            onKeepCurrent={() => setAlternativeDismissed(true)}
+            onUseAlternative={() => {
+              if (routeAssessment?.recommended) {
+                setSelectedRouteId(routeAssessment.recommended.id);
+                setAlternativeDismissed(false);
+              }
+            }}
+            onUseOriginal={() => {
+              setSelectedRouteId('current');
+              setAlternativeDismissed(true);
+            }}
+            showNoAlternative={Boolean(route?.source === 'osrm' && activeRouteAssessment?.impacts.length && !routeAssessment?.recommended && selectedRouteId === 'current')}
           />
-        ) : (
+        ) : !reportStep && !selectedReport && primaryMapCategory === 'parking' ? (
           <NearbyParkingPanel
             zones={nearbyZones}
             expanded={nearbyExpanded}
             onExpandedChange={setNearbyExpanded}
             onSelectZone={focusZone}
           />
-        )}
+        ) : null}
+        {evActive && !reportStep && !reportLocationPicking && !selectedReport && !ev.selectedStationId ? (
+          <EvMapStatus loading={ev.loading} error={ev.error} count={ev.stations.length} truncated={ev.truncated} filters={ev.filters}
+            retry={ev.retry} onFilters={() => setEvFiltersOpen(true)} compact={Boolean(routeTarget)} />
+        ) : null}
       </View>
 
       <VehicleSelectorSheet
@@ -440,7 +665,7 @@ export default function MapScreen() {
             ? distanceMeters((testLocation ?? location)!, selectedZone.location)
             : undefined
         }
-        onNavigate={(zone) => void showRoute(zone)}
+        onNavigate={(zone) => void showRoute(parkingDestination(zone))}
         onStartParking={startParking}
         startDisabled={selectedZone?.parkingAllowed === false}
       />
@@ -457,6 +682,32 @@ export default function MapScreen() {
           router.push('/scan');
         }}
       />
+
+      <RoadReportCreationSheet
+        visible={Boolean(reportStep)}
+        step={reportStep ?? 'type'}
+        draft={reportDraft}
+        onChange={(next) => setReportDraft((current) => ({ ...current, ...next }))}
+        onChooseType={beginReportLocation}
+        onStepChange={setReportStep}
+        onClose={cancelReport}
+        onSubmit={submitReport}
+        loading={createReport.isPending}
+        error={createReport.error ? t('roadReports.createFailed') : undefined}
+      />
+
+      <RoadReportDetailsSheet
+        key={selectedReport?.id ?? 'closed-road-report'}
+        report={selectedReport}
+        visible={Boolean(selectedReport)}
+        onClose={() => setSelectedReport(undefined)}
+        onUpdated={setSelectedReport}
+      />
+
+      <MapLayersSheet visible={layersSheetOpen} onClose={() => setLayersSheetOpen(false)} />
+      <EvStationDetailsSheet key={ev.selectedStationId ?? 'closed-ev'} station={evActive ? ev.selectedStation : undefined}
+        onClose={() => ev.select(undefined)} onRoute={(station) => void showRoute(evDestination(station))} />
+      <EvFiltersSheet visible={evActive && evFiltersOpen} onClose={() => setEvFiltersOpen(false)} />
     </View>
   );
 }

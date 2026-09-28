@@ -7,8 +7,9 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { shadow } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
-import type { ParkingZone, RouteClosure, RouteResult } from '@/types';
+import type { RouteDestination, RouteClosure, RouteResult } from '@/types';
 import { formatDistance } from '@/utils/geo';
+import type { RouteImpact, ScoredRouteCandidate } from '@/utils/routeImpact';
 
 function RouteDetails({ route }: { route: RouteResult }) {
   const { colors } = useTheme();
@@ -53,19 +54,30 @@ function RouteDetails({ route }: { route: RouteResult }) {
 }
 
 interface CompactRoutePanelProps {
-  zone: ParkingZone;
+  destination: RouteDestination;
   route?: RouteResult;
   loading: boolean;
   detailsExpanded: boolean;
   onDetailsExpandedChange: (expanded: boolean) => void;
   onClose: () => void;
   onOpenMaps: () => void;
-  onStartParking: () => void;
+  onStartParking?: () => void;
+  onOpenDestination?: () => void;
   startDisabled?: boolean;
+  impacts?: RouteImpact[];
+  suggestedAlternative?: ScoredRouteCandidate;
+  originalDurationSeconds?: number;
+  usingAlternative?: boolean;
+  alternativeDismissed?: boolean;
+  onSelectImpact?: (impact: RouteImpact) => void;
+  onKeepCurrent?: () => void;
+  onUseAlternative?: () => void;
+  onUseOriginal?: () => void;
+  showNoAlternative?: boolean;
 }
 
 export function CompactRoutePanel({
-  zone,
+  destination,
   route,
   loading,
   detailsExpanded,
@@ -73,12 +85,33 @@ export function CompactRoutePanel({
   onClose,
   onOpenMaps,
   onStartParking,
+  onOpenDestination,
   startDisabled = false,
+  impacts = [],
+  suggestedAlternative,
+  originalDurationSeconds,
+  usingAlternative = false,
+  alternativeDismissed = false,
+  onSelectImpact,
+  onKeepCurrent,
+  onUseAlternative,
+  onUseOriginal,
+  showNoAlternative = false,
 }: CompactRoutePanelProps) {
   const { colors } = useTheme();
   const { t, locale, row } = useLocale();
-  const name = locale === 'ar' ? zone.nameAr : zone.name;
+  const name = locale === 'ar' && destination.type === 'parking' ? destination.nameAr : destination.name;
   const Chevron = detailsExpanded ? ChevronDown : ChevronUp;
+  const primaryImpact = impacts[0];
+  const issueName = primaryImpact ? t(`roadReports.type.${primaryImpact.report.type}`) : '';
+  const issueText = primaryImpact
+    ? primaryImpact.distanceAheadMeters === undefined
+      ? t('route.issueOnRoute', { type: issueName })
+      : t('route.issueAhead', { type: issueName, distance: formatDistance(primaryImpact.distanceAheadMeters) })
+    : '';
+  const durationDeltaMinutes = suggestedAlternative && originalDurationSeconds !== undefined
+    ? Math.round((suggestedAlternative.durationSeconds - originalDurationSeconds) / 60)
+    : 0;
 
   return (
     <View
@@ -108,6 +141,44 @@ export function CompactRoutePanel({
           size={32}
         />
       </View>
+
+      {primaryImpact ? (
+        <PressableScale
+          onPress={() => onSelectImpact?.(primaryImpact)}
+          accessibilityRole="button"
+          style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warningSoft }}
+        >
+          <TriangleAlert size={17} color={colors.warningText} strokeWidth={2.3} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <AppText variant="caption" color="warningText" weight="bold">{issueText}</AppText>
+            <AppText variant="caption" color="warningText">
+              {impacts.length > 1 ? t('route.issueCount', { count: impacts.length }) : null}
+              {primaryImpact.report.status === 'unverified' ? `${impacts.length > 1 ? ' · ' : ''}${t('route.unverified')}` : null}
+            </AppText>
+          </View>
+        </PressableScale>
+      ) : null}
+
+      {usingAlternative ? (
+        <View style={{ gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.successSoft }}>
+          <AppText variant="caption" color="successText" weight="bold">{t('route.usingAlternative')}</AppText>
+          <AppButton label={t('route.useOriginal')} onPress={onUseOriginal} variant="tonal" size="sm" />
+        </View>
+      ) : suggestedAlternative && !alternativeDismissed ? (
+        <View style={{ gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.infoSoft }}>
+          <AppText variant="caption" color="infoText" weight="bold">
+            {durationDeltaMinutes > 0
+              ? t('route.alternativeAdds', { minutes: durationDeltaMinutes })
+              : t('route.alternativeSaves', { minutes: Math.abs(durationDeltaMinutes) })}
+          </AppText>
+          <View style={{ flexDirection: row, gap: spacing.sm }}>
+            <AppButton label={t('route.keepCurrent')} onPress={onKeepCurrent} variant="secondary" size="sm" style={{ flex: 1 }} />
+            <AppButton label={t('route.useAlternative')} onPress={onUseAlternative} size="sm" style={{ flex: 1 }} />
+          </View>
+        </View>
+      ) : showNoAlternative && !alternativeDismissed ? (
+        <AppText variant="caption" color="textSecondary">{t('route.noSaferAlternative')}</AppText>
+      ) : null}
 
       {route ? (
         <>
@@ -141,11 +212,11 @@ export function CompactRoutePanel({
           icon={<Navigation size={15} color={colors.text} strokeWidth={2.2} />}
         />
         <AppButton
-          label={t('zone.startParking')}
+          label={destination.type === 'parking' ? t('zone.startParking') : t('ev.details')}
           size="sm"
           style={{ flex: 1 }}
-          onPress={onStartParking}
-          disabled={startDisabled || zone.availability === 'full'}
+          onPress={destination.type === 'parking' ? onStartParking : onOpenDestination}
+          disabled={destination.type === 'parking' && (startDisabled || destination.zone.availability === 'full')}
         />
       </View>
     </View>

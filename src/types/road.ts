@@ -121,7 +121,16 @@ export interface RouteResult {
   closuresOnRoute: RouteClosure[];
   /** Alternatives that were not taken, and the closure that ruled each one out. */
   rejected: { coordinates: GeoPoint[]; blockedBy?: RouteClosure }[];
+  /** Real alternatives returned by the configured routing provider. */
+  alternatives: RouteAlternative[];
   source: 'osrm' | 'straight-line';
   /** Road-network point used by the router when the raw destination is off-road. */
   snappedDestination?: GeoPoint;
+}
+
+export interface RouteAlternative {
+  id: string;
+  coordinates: GeoPoint[];
+  distanceMeters: number;
+  durationSeconds: number;
 }

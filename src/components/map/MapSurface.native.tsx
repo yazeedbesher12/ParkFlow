@@ -9,6 +9,8 @@ import {
   parkingLocationAccessibilityLabel,
 } from './ParkingLocationMarker';
 import { TestLocationMarker } from './TestLocationMarker';
+import { RoadReportMarker } from './RoadReportMarker';
+import { EvStationMarker } from './EvStationMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { mapStyleDark, mapStyleLight } from './mapStyle';
@@ -33,6 +35,11 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     onRegionChangeComplete,
     checkpoints,
     onSelectCheckpoint,
+    evStations, selectedEvStationId, onSelectEvStation,
+    roadReports,
+    selectedRoadReportId,
+    onSelectRoadReport,
+    reportDraft,
     route,
     landmark,
     style,
@@ -105,6 +112,29 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             <CheckpointMarker status={checkpoint.status} assumed={checkpoint.assumed} label={checkpoint.name} />
           </Marker>
         ))}
+
+        {evStations?.map((station) => (
+          <Marker key={`${station.id}-${station.status}-${station.id === selectedEvStationId}`} coordinate={{ latitude: station.latitude, longitude: station.longitude }} anchor={{ x: 0.5, y: 0.5 }}
+            accessibilityLabel={station.name} tracksViewChanges={false} zIndex={station.id === selectedEvStationId ? 60 : 30}
+            onPress={(event) => { event.stopPropagation(); onSelectEvStation?.(station); }}>
+            <EvStationMarker status={station.status} selected={station.id === selectedEvStationId} />
+          </Marker>
+        ))}
+        {roadReports?.map((report) => (
+          <Marker
+            key={report.id}
+            coordinate={{ latitude: report.latitude, longitude: report.longitude }}
+            onPress={(event) => { event.stopPropagation(); onSelectRoadReport?.(report); }}
+            anchor={{ x: 0.5, y: 1 }}
+            zIndex={report.id === selectedRoadReportId ? 60 : 40}
+            tracksViewChanges
+            accessibilityLabel={report.type}
+          >
+            <RoadReportMarker type={report.type} selected={report.id === selectedRoadReportId} />
+          </Marker>
+        ))}
+
+        {reportDraft ? <Marker coordinate={reportDraft.location} anchor={{ x: 0.5, y: 1 }} zIndex={80}><RoadReportMarker type={reportDraft.type} selected /></Marker> : null}
 
         {landmark ? (
           <Marker coordinate={landmark.location} anchor={{ x: 0.5, y: 0.5 }}>

@@ -19,6 +19,10 @@ import type {
   PointsEntry,
   ReportedAvailability,
   RoadFeedItem,
+  RoadReport,
+  RoadReportBounds,
+  CreateRoadReportInput,
+  CreateRoadReportResult,
   RouteResult,
   Transaction,
   TransactionType,
@@ -215,6 +219,14 @@ export interface RoadService {
   }): Promise<{ report: ZoneReport; points?: PointsEntry }>;
 }
 
+export interface RoadReportService {
+  list(bounds: RoadReportBounds): Promise<RoadReport[]>;
+  get(reportId: string): Promise<RoadReport>;
+  create(input: CreateRoadReportInput): Promise<CreateRoadReportResult>;
+  confirm(reportId: string): Promise<RoadReport>;
+  reject(reportId: string): Promise<RoadReport>;
+}
+
 export interface RoutingService {
   getRoute(
     from: GeoPoint,
@@ -232,6 +244,7 @@ export interface TrustService {
 }
 
 export interface Services {
+  evStations: import('../types/evStation').EvStationApi;
   auth: AuthService;
   vehicles: VehicleService;
   parking: ParkingService;
@@ -241,6 +254,7 @@ export interface Services {
   notifications: NotificationService;
   profile: ProfileService;
   roads: RoadService;
+  roadReports: RoadReportService;
   routing: RoutingService;
   trust: TrustService;
 }

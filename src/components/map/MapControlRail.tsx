@@ -10,6 +10,7 @@ import { shadow } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 import type { LocationStatus } from '@/hooks/useUserLocation';
 import { RoadAlertButton } from './RoadAlertButton';
+import { MapLayersButton } from './MapLayersButton';
 
 interface MapControlRailProps {
   locationStatus: LocationStatus;
@@ -21,6 +22,8 @@ interface MapControlRailProps {
   onScanQr: () => void;
   onEnterCode: () => void;
   onOpenRoads: () => void;
+  enabledLayerCount: number;
+  onOpenLayers: () => void;
 }
 
 export function MapControlRail({
@@ -33,6 +36,8 @@ export function MapControlRail({
   onScanQr,
   onEnterCode,
   onOpenRoads,
+  enabledLayerCount,
+  onOpenLayers,
 }: MapControlRailProps) {
   const { colors } = useTheme();
   const { t, isRTL, row } = useLocale();
@@ -97,6 +102,8 @@ export function MapControlRail({
           {action(t('map.enterCode'), <Hash size={17} color={colors.brand} strokeWidth={2.3} />, onEnterCode)}
         </View>
       ) : null}
+
+      <MapLayersButton enabledCount={enabledLayerCount} onPress={onOpenLayers} />
 
       <View
         style={[

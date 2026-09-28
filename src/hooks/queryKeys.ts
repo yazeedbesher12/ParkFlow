@@ -1,4 +1,4 @@
-import type { GeoPoint } from '@/types';
+import type { GeoPoint, RoadReportBounds } from '@/types';
 
 const pointKey = (point?: GeoPoint) =>
   point ? `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}` : '';
@@ -38,6 +38,9 @@ export const queryKeys = {
 
   checkpoints: () => ['roads', 'checkpoints'] as const,
   roadFeed: () => ['roads', 'feed'] as const,
+  roadReportLists: () => ['road-reports', 'list'] as const,
+  roadReports: (bounds: RoadReportBounds) => ['road-reports', 'list', bounds.north, bounds.south, bounds.east, bounds.west] as const,
+  roadReport: (reportId: string) => ['road-reports', 'detail', reportId] as const,
   route: (from?: GeoPoint, to?: GeoPoint, mode = 'checkpoint-aware') =>
     ['route', pointKey(from), pointKey(to), mode] as const,
   trust: (userId: string) => ['trust', userId] as const,

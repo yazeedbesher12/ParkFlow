@@ -9,12 +9,14 @@ import { radius } from '@/theme/radius';
 import { shadow } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 import type { UserVehicleView } from '@/types';
+import { RoadReportButton } from './RoadReportButton';
 
 interface MapTopBarProps {
   vehicle?: UserVehicleView;
   unreadCount: number;
   onOpenVehicles: () => void;
   onOpenNotifications: () => void;
+  onOpenReport?: () => void;
 }
 
 export function MapTopBar({
@@ -22,6 +24,7 @@ export function MapTopBar({
   unreadCount,
   onOpenVehicles,
   onOpenNotifications,
+  onOpenReport,
 }: MapTopBarProps) {
   const { colors } = useTheme();
   const { t, row } = useLocale();
@@ -47,7 +50,7 @@ export function MapTopBar({
           style={[
             {
               minWidth: 0,
-              maxWidth: '82%',
+              flex: 1,
               flexDirection: row,
               alignItems: 'center',
               alignSelf: row === 'row-reverse' ? 'flex-end' : 'flex-start',
@@ -89,6 +92,8 @@ export function MapTopBar({
             style={{ flexShrink: 0 }}
           />
         </PressableScale>
+
+        {onOpenReport ? <RoadReportButton onPress={onOpenReport} /> : null}
 
         <View style={{ marginStart: 'auto' }}>
           <IconButton

@@ -4,6 +4,8 @@ import './modules/vehicles/routes';
 import './modules/parking/routes';
 import './modules/wallet/routes';
 import './modules/roads/routes';
+import './modules/roadReports/routes';
+import './modules/evStations/routes';
 import './modules/violations/routes';
 import './modules/notifications/routes';
 import './modules/admin/routes';

@@ -6,4 +6,8 @@ export * from './wallet';
 export * from './violation';
 export * from './notification';
 export * from './road';
+export * from './roadReport';
 export * from './ramallahParking';
+export * from './mapLayers';
+export * from './evStation';
+export * from './routeDestination';

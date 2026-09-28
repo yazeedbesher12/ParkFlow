@@ -36,6 +36,7 @@ export const secureStorage: KeyValueStorage = secureAvailable
 export const STORAGE_KEYS = {
   authSession: 'sp.auth.session',
   preferences: 'sp.preferences',
+  mapLayers: 'sp.map.layers',
   mockDb: 'sp.mock.db',
 } as const;
 

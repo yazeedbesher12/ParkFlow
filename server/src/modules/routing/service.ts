@@ -136,6 +136,7 @@ export const routingService = {
         penaltySeconds: penaltyOf(closures),
         closuresOnRoute: closures,
         rejected: [],
+        alternatives: [],
         source: 'straight-line',
         snappedDestination: destination,
       };
@@ -153,15 +154,22 @@ export const routingService = {
       );
 
     const best = scored[0]!;
+    const alternatives = scored.slice(1, 1 + (options.maxAlternatives ?? scored.length));
     return {
       coordinates: best.coordinates,
       distanceMeters: Math.round(best.distance),
       durationSeconds: Math.round(best.duration),
       penaltySeconds: best.penalty,
       closuresOnRoute: best.closures,
-      rejected: scored.slice(1, 1 + (options.maxAlternatives ?? scored.length)).map((route) => ({
+      rejected: alternatives.map((route) => ({
         coordinates: route.coordinates,
         blockedBy: worstOf(route.closures),
+      })),
+      alternatives: alternatives.map((route, index) => ({
+        id: `alternative-${index + 1}`,
+        coordinates: route.coordinates,
+        distanceMeters: Math.round(route.distance),
+        durationSeconds: Math.round(route.duration),
       })),
       source: 'osrm',
       snappedDestination: destination,

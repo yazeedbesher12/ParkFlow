@@ -13,6 +13,17 @@ export async function seed(){
  // No fabricated occupancy reports, balances, users, or violations are seeded.
  }
  for(const c of catalog.checkpoints){const {location,...rest}=c;await db.roadCheckpoint.upsert({where:{id:c.id},create:{...rest,...location},update:{}});}
+ if(process.env.NODE_ENV!=='production'){
+  const demoUser=await db.user.upsert({where:{email:'road-reports-demo@parkflow.local'},create:{id:'road-reports-demo-user',email:'road-reports-demo@parkflow.local',emailVerifiedAt:new Date(),fullName:'Demo data (not a real reporter)',wallet:{create:{}}},update:{fullName:'Demo data (not a real reporter)'}});
+  const now=Date.now();
+  const demos=[
+   {id:'demo-road-report-accident',type:'accident' as const,latitude:31.9051,longitude:35.2038,severity:'high' as const,description:'Demo only — sample accident report',minutes:74},
+   {id:'demo-road-report-congestion',type:'traffic_congestion' as const,latitude:31.8992,longitude:35.2096,severity:'moderate' as const,direction:'northbound' as const,description:'Demo only — sample congestion report',minutes:24},
+   {id:'demo-road-report-construction',type:'construction' as const,latitude:31.9122,longitude:35.1994,severity:'low' as const,direction:'both' as const,description:'Demo only — sample construction report',minutes:720},
+   {id:'demo-road-report-hazard',type:'road_hazard' as const,latitude:31.8971,longitude:35.2012,severity:'moderate' as const,description:'Demo only — sample road hazard report',minutes:180},
+  ];
+  for(const item of demos){const {id,minutes,...data}=item;await db.roadReport.upsert({where:{id},create:{id,reporterUserId:demoUser.id,...data,isDemo:true,expiresAt:new Date(now+minutes*60000)},update:{reporterUserId:demoUser.id,...data,isDemo:true,status:'unverified',confidenceScore:0.35,confirmationCount:0,rejectionCount:0,expiresAt:new Date(now+minutes*60000)}});}
+ }
  if(process.env.SEED_ADMIN_EMAIL&&process.env.NODE_ENV!=='production'){const email=process.env.SEED_ADMIN_EMAIL.trim().toLowerCase();await db.user.upsert({where:{email},create:{email,emailVerifiedAt:new Date(),fullName:'Development Admin',role:'ADMIN',wallet:{create:{}}},update:{}});}
 }
-if(require.main===module)seed().then(()=>console.log('Seeded parking catalog and checkpoints')).finally(()=>db.$disconnect());
+if(require.main===module)seed().then(()=>console.log('Seeded parking catalog, checkpoints, and local demo road reports')).finally(()=>db.$disconnect());

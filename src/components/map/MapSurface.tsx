@@ -10,6 +10,8 @@ import {
   parkingLocationAccessibilityLabel,
 } from './ParkingLocationMarker';
 import { TestLocationMarker } from './TestLocationMarker';
+import { RoadReportMarker } from './RoadReportMarker';
+import { EvStationMarker } from './EvStationMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { GeoPoint, GeoRegion } from '@/types';
@@ -76,6 +78,11 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     onRegionChangeComplete,
     checkpoints,
     onSelectCheckpoint,
+    evStations, selectedEvStationId, onSelectEvStation,
+    roadReports,
+    selectedRoadReportId,
+    onSelectRoadReport,
+    reportDraft,
     route,
     landmark,
     style,
@@ -280,6 +287,36 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
               </Pressable>
             );
           })}
+
+          {evStations?.map((station) => {
+            const { x, y } = project(station.latitude, station.longitude);
+            if (x < -50 || y < -50 || x > size.x + 50 || y > size.y + 50) return null;
+            return <Pressable key={station.id} accessibilityRole="button" accessibilityLabel={station.name} accessibilityState={{ selected: station.id === selectedEvStationId }}
+              onPress={() => onSelectEvStation?.(station)}
+              style={{ position: 'absolute', left: x - 24, top: y - 24, width: 48, height: 48, zIndex: station.id === selectedEvStationId ? 6 : 3 }}>
+              <EvStationMarker status={station.status} selected={station.id === selectedEvStationId} />
+            </Pressable>;
+          })}
+          {roadReports?.map((report) => {
+            const { x, y } = project(report.latitude, report.longitude);
+            if (x < -50 || y < -50 || x > size.x + 50 || y > size.y + 50) return null;
+            return (
+              <Pressable
+                key={report.id}
+                onPress={() => onSelectRoadReport?.(report)}
+                accessibilityRole="button"
+                accessibilityLabel={report.type}
+                style={{ position: 'absolute', left: x - 24, top: y - 40, width: 48, alignItems: 'center', zIndex: report.id === selectedRoadReportId ? 6 : 4 }}
+              >
+                <RoadReportMarker type={report.type} selected={report.id === selectedRoadReportId} />
+              </Pressable>
+            );
+          })}
+
+          {reportDraft ? (() => {
+            const { x, y } = project(reportDraft.location.latitude, reportDraft.location.longitude);
+            return <View pointerEvents="none" style={{ position: 'absolute', left: x - 24, top: y - 40, width: 48, alignItems: 'center', zIndex: 8 }}><RoadReportMarker type={reportDraft.type} selected /></View>;
+          })() : null}
 
           {landmark
             ? (() => {
