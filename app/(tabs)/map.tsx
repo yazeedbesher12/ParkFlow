@@ -23,6 +23,8 @@ import { MapLayersSheet } from '@/components/map/MapLayersSheet';
 import { EvStationDetailsSheet } from '@/components/map/EvStationDetailsSheet';
 import { EvFiltersSheet } from '@/components/map/EvFiltersSheet';
 import { EvMapStatus } from '@/components/map/EvMapStatus';
+import { DestinationSearchBox } from '@/components/map/DestinationSearchBox';
+import { DestinationParkingPanel } from '@/components/map/DestinationParkingPanel';
 import { useEvStations } from '@/hooks/useEvStations';
 import { evDestination, parkingDestination, type EvChargingStation, type RouteDestination } from '@/types';
 
@@ -41,6 +43,8 @@ import { distanceMeters } from '@/utils/geo';
 import { assessRouteAlternatives } from '@/utils/routeImpact';
 import { haptics } from '@/utils/haptics';
 import { isValidGeoPoint, normalizeGeoPoint, normalizeGeoPoints } from '@/utils/coordinates';
+import { searchPlaces, type PlaceSuggestion } from '@/services/placeSearchService';
+import { rankParkingForDestination } from '@/utils/parkingRecommendation';
 import { useMapLayersStore } from '@/store/mapLayersStore';
 import { useReservationRouteStore } from '@/store/reservationRouteStore';
 import {
@@ -98,6 +102,12 @@ export default function MapScreen() {
   const [reportDraft, setReportDraft] = useState<Partial<CreateRoadReportInput>>({});
   const [selectedReport, setSelectedReport] = useState<RoadReport>();
   const [layersSheetOpen, setLayersSheetOpen] = useState(false);
+  const [destinationQuery, setDestinationQuery] = useState('');
+  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [placeSearchLoading, setPlaceSearchLoading] = useState(false);
+  const [placeSearchError, setPlaceSearchError] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [selectedDestination, setSelectedDestination] = useState<PlaceSuggestion>();
 
   useFocusEffect(
     useCallback(() => {
@@ -171,6 +181,44 @@ export default function MapScreen() {
     () => nearbyZones.filter(({ zone }) => !ramallahParkingZoneIds.has(zone.id)),
     [nearbyZones],
   );
+  const destinationRecommendations = useMemo(
+    () => selectedDestination
+      ? rankParkingForDestination(selectedDestination.location, [...zones, ...ramallahParkingZones])
+      : [],
+    [selectedDestination, zones],
+  );
+
+  useEffect(() => {
+    const query = destinationQuery.trim();
+    if (query.length < 2 || selectedDestination?.name === destinationQuery) {
+      setPlaceSuggestions([]);
+      setPlaceSearchLoading(false);
+      setPlaceSearchError(false);
+      return;
+    }
+    let cancelled = false;
+    setPlaceSearchLoading(true);
+    setPlaceSearchError(false);
+    const timeout = setTimeout(() => {
+      searchPlaces(query)
+        .then((results) => {
+          if (!cancelled) setPlaceSuggestions(results);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setPlaceSuggestions([]);
+            setPlaceSearchError(true);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setPlaceSearchLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [destinationQuery, selectedDestination?.name]);
 
   const alerts = useMemo(
     () =>
@@ -252,6 +300,8 @@ export default function MapScreen() {
       durationSeconds: selectedAlternative.durationSeconds,
       penaltySeconds: 0,
       closuresOnRoute: [],
+      trafficSegments: undefined,
+      trafficSummary: undefined,
     };
   }, [route, selectedAlternative]);
   const activeRouteAssessment = selectedRouteId === 'current'
@@ -272,6 +322,13 @@ export default function MapScreen() {
           ];
       return {
         coordinates,
+        trafficState: displayedRoute.trafficSummary?.state,
+        trafficSegments: displayedRoute.trafficSegments
+          ?.map((segment) => ({
+            ...segment,
+            coordinates: normalizeGeoPoints(segment.coordinates),
+          }))
+          .filter((segment) => segment.coordinates.length >= 2),
         alternatives: alternativeLines
           .map(normalizeGeoPoints)
           .filter((line) => line.length >= 2),
@@ -325,6 +382,7 @@ export default function MapScreen() {
     setEntryMenuOpen(false);
     setNearbyExpanded(false);
     setRouteTarget(undefined);
+    setSelectedDestination(undefined);
     setRouteDetailsExpanded(false);
     setSelectedZoneId(zone.id);
     setSelectedReport(undefined);
@@ -419,6 +477,36 @@ export default function MapScreen() {
     },
     [location, requestLocation, storedRouteOrigin, storedRouteOriginMode, t, testLocation, testLocationMode, ev.select],
   );
+
+  const changeDestinationQuery = useCallback((value: string) => {
+    setDestinationQuery(value);
+    setSuggestionsOpen(true);
+    if (!value.trim()) {
+      setSelectedDestination(undefined);
+      setPlaceSuggestions([]);
+      setPlaceSearchError(false);
+    }
+  }, []);
+
+  const selectDestination = useCallback((suggestion: PlaceSuggestion) => {
+    haptics.select();
+    setSelectedDestination(suggestion);
+    setDestinationQuery(suggestion.name);
+    setSuggestionsOpen(false);
+    setPlaceSuggestions([]);
+    setSelectedZoneId(undefined);
+    setSelectedReport(undefined);
+    setRouteTarget(undefined);
+    setRouteDetailsExpanded(false);
+    setNearbyExpanded(false);
+    const next: GeoRegion = {
+      ...suggestion.location,
+      latitudeDelta: 0.012,
+      longitudeDelta: 0.012,
+    };
+    setRegion(next);
+    mapRef.current?.animateToRegion(next, 450);
+  }, []);
 
   useEffect(() => {
     if (!mapFocused || !pendingReservationRouteZoneId) return;
@@ -602,6 +690,7 @@ export default function MapScreen() {
         }}
         reportDraft={reportLocationPicking && reportDraft.type && reportDraft.latitude !== undefined && reportDraft.longitude !== undefined ? { type: reportDraft.type, location: { latitude: reportDraft.latitude, longitude: reportDraft.longitude } } : undefined}
         route={mapRoute}
+        landmark={selectedDestination ? { name: selectedDestination.name, location: selectedDestination.location } : undefined}
         style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
       />
 
@@ -610,6 +699,7 @@ export default function MapScreen() {
         style={{
           paddingTop: insets.top + spacing.sm,
           paddingHorizontal: screenPadding,
+          gap: spacing.sm,
         }}
       >
         <MapTopBar
@@ -626,6 +716,17 @@ export default function MapScreen() {
             setReportStep('type');
           } : undefined}
         />
+        {!reportLocationPicking && !reportStep && !selectedReport ? (
+          <DestinationSearchBox
+            value={destinationQuery}
+            suggestions={placeSuggestions}
+            loading={placeSearchLoading}
+            error={placeSearchError}
+            showSuggestions={suggestionsOpen && !routeTarget}
+            onChange={changeDestinationQuery}
+            onSelect={selectDestination}
+          />
+        ) : null}
       </View>
 
       <View
@@ -727,6 +828,12 @@ export default function MapScreen() {
               setAlternativeDismissed(true);
             }}
             showNoAlternative={Boolean(route?.source === 'osrm' && activeRouteAssessment?.impacts.length && !routeAssessment?.recommended && selectedRouteId === 'current')}
+          />
+        ) : !reportStep && !selectedReport && selectedDestination && primaryMapCategory === 'parking' ? (
+          <DestinationParkingPanel
+            destinationName={selectedDestination.name}
+            recommendations={destinationRecommendations}
+            onSelect={(item) => void startRoute(parkingDestination(item.zone))}
           />
         ) : !reportStep && !selectedReport && primaryMapCategory === 'parking' ? (
           <NearbyParkingPanel

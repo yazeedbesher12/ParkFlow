@@ -16,6 +16,9 @@ function RouteDetails({ route }: { route: RouteResult }) {
   const { t, locale, row } = useLocale();
   const nameOf = (closure: RouteClosure) => (locale === 'ar' ? closure.nameAr : closure.nameEn);
   const statusOf = (closure: RouteClosure) => t(`roads.status.${closure.status}` as const);
+  const delayMinutes = route.trafficSummary?.delaySeconds
+    ? Math.max(1, Math.round(route.trafficSummary.delaySeconds / 60))
+    : undefined;
   const avoided = [
     ...new Map(
       route.rejected.flatMap((item) =>
@@ -37,6 +40,21 @@ function RouteDetails({ route }: { route: RouteResult }) {
 
   return (
     <View style={{ gap: spacing.xs, paddingHorizontal: spacing.sm }}>
+      {route.trafficSummary ? (
+        <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
+          <TriangleAlert size={15} color={colors.info} strokeWidth={2.2} />
+          <View style={{ flex: 1 }}>
+            <AppText variant="caption" color="infoText">
+              {t(`route.traffic.${route.trafficSummary.level}` as const)}
+            </AppText>
+            {delayMinutes ? (
+              <AppText variant="caption" color="textSecondary">
+                {t('route.trafficDelay', { minutes: delayMinutes })}
+              </AppText>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
       {lines.map((line) => (
         <View key={line.key} style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
           {line.safe ? (

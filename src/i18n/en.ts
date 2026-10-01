@@ -111,6 +111,11 @@ export const en = {
   'map.collapseNearby': 'Collapse nearby parking',
   'map.noZones': 'No parking zones nearby',
   'map.noZonesBody': 'Move the map or search for a street to find parking.',
+  'map.noDestinations': 'No destinations found nearby',
+  'map.searchFailed': 'Could not load suggestions',
+  'map.recommendedParking': 'Recommended Parking',
+  'map.recommended': 'Recommended',
+  'map.noRecommendedParking': 'No suitable parking found nearby.',
   'map.locationDenied': 'Location is off',
   'map.locationDeniedBody':
     'Turn on location to see parking around you, or pick a zone on the map.',
@@ -447,6 +452,10 @@ export const en = {
   'route.usingAlternative': 'Using the safer alternative',
   'route.useOriginal': 'Return to original route',
   'route.noSaferAlternative': 'Issue reported ahead. No safer alternative is currently available.',
+  'route.traffic.light': 'Light traffic',
+  'route.traffic.moderate': 'Moderate traffic',
+  'route.traffic.heavy': 'Heavy traffic',
+  'route.trafficDelay': '+{minutes} min due to congestion',
 
   'zone.route': 'Show route',
   'zone.crowdLine': 'Drivers say {level} · {minutes} min ago ({count} reports)',

@@ -14,6 +14,13 @@ import { EvStationMarker } from './EvStationMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { mapStyleDark, mapStyleLight } from './mapStyle';
+import type { RouteTrafficState } from '@/types';
+
+const TRAFFIC_COLORS: Record<RouteTrafficState, string> = {
+  normal: '#16A34A',
+  slow: '#F59E0B',
+  traffic_jam: '#DC2626',
+};
 
 /**
  * Google Maps on Android; Apple Maps on iOS (custom JSON styling only applies to
@@ -94,7 +101,22 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
                 lineDashPattern={[8, 8]}
               />
             ))}
-            <Polyline coordinates={route.coordinates} strokeColor={colors.brand} strokeWidth={5} />
+            {route.trafficSegments?.length ? (
+              route.trafficSegments.map((segment, index) => (
+                <Polyline
+                  key={`traffic-${index}-${segment.state}`}
+                  coordinates={segment.coordinates}
+                  strokeColor={TRAFFIC_COLORS[segment.state]}
+                  strokeWidth={5}
+                />
+              ))
+            ) : (
+              <Polyline
+                coordinates={route.coordinates}
+                strokeColor={route.trafficState ? TRAFFIC_COLORS[route.trafficState] : colors.brand}
+                strokeWidth={5}
+              />
+            )}
           </>
         ) : null}
 

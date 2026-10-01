@@ -14,7 +14,7 @@ import { RoadReportMarker } from './RoadReportMarker';
 import { EvStationMarker } from './EvStationMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
-import type { GeoPoint, GeoRegion } from '@/types';
+import type { GeoPoint, GeoRegion, RouteTrafficState } from '@/types';
 import { isValidGeoPoint, isValidGeoRegion, normalizeGeoPoints } from '@/utils/coordinates';
 import { DEFAULT_REGION } from '@/data/mapDefaults';
 
@@ -37,6 +37,27 @@ const PLACES = `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}
 
 type EdgePadding = { top: number; right: number; bottom: number; left: number };
 type PendingFit = { coordinates: GeoPoint[]; edgePadding: EdgePadding; durationMs: number };
+
+const TRAFFIC_COLORS: Record<RouteTrafficState, string> = {
+  normal: '#16A34A',
+  slow: '#F59E0B',
+  traffic_jam: '#DC2626',
+};
+
+const TRAFFIC_LABELS: Record<RouteTrafficState, string> = {
+  normal: 'Clear traffic',
+  slow: 'Slow traffic',
+  traffic_jam: 'Heavy traffic',
+};
+
+const withTrafficTooltip = (line: L.Polyline, state?: RouteTrafficState) => {
+  if (!state) return line;
+  return line.bindTooltip(TRAFFIC_LABELS[state], {
+    direction: 'top',
+    opacity: 0.95,
+    sticky: true,
+  });
+};
 
 function fitMapToCoordinates(map: L.Map, request: PendingFit): 'applied' | 'deferred' {
   const coordinates = normalizeGeoPoints(request.coordinates);
@@ -255,6 +276,9 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     const mainLine = route.coordinates.filter(isValidGeoPoint);
     if (mainLine.length !== route.coordinates.length || mainLine.length < 2) return;
 
+    const trafficSegments = route.trafficSegments
+      ?.filter((segment) => segment.coordinates.length >= 2 && segment.coordinates.every(isValidGeoPoint));
+    const hasTrafficSegments = Boolean(trafficSegments?.length);
     const layers = [
       ...route.alternatives
         .filter((line) => line.length >= 2 && line.every(isValidGeoPoint))
@@ -268,7 +292,25 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
         ),
       // A light casing under the route keeps it readable on satellite imagery.
       L.polyline(toLatLngs(mainLine), { color: colors.surface, weight: 9, opacity: 0.9 }),
-      L.polyline(toLatLngs(mainLine), { color: colors.brand, weight: 5 }),
+      ...(hasTrafficSegments
+        ? trafficSegments!.map((segment) =>
+            withTrafficTooltip(
+              L.polyline(toLatLngs(segment.coordinates), {
+                color: TRAFFIC_COLORS[segment.state],
+                weight: 5,
+              }),
+              segment.state,
+            ),
+          )
+        : [
+            withTrafficTooltip(
+              L.polyline(toLatLngs(mainLine), {
+                color: route.trafficState ? TRAFFIC_COLORS[route.trafficState] : colors.brand,
+                weight: 5,
+              }),
+              route.trafficState,
+            ),
+          ]),
     ];
     layers.forEach((layer) => layer.addTo(map));
     return () => layers.forEach((layer) => layer.remove());

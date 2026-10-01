@@ -7,6 +7,7 @@ import type {
   RamallahParkingLocation,
   RoadReport,
   RoadReportType,
+  RouteTrafficSegment,
 } from '@/types';
 
 export interface MapCheckpoint {
@@ -19,6 +20,8 @@ export interface MapCheckpoint {
 
 export interface MapRoute {
   coordinates: GeoPoint[];
+  trafficState?: RouteTrafficSegment['state'];
+  trafficSegments?: RouteTrafficSegment[];
   /** Alternatives that were not taken — drawn dashed. */
   alternatives: GeoPoint[][];
 }

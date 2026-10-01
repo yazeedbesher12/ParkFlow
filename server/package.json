@@ -9,6 +9,7 @@
     "worker": "tsx src/jobs/worker.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "traffic:ramallah": "tsx scripts/trafficRamallah.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
