@@ -1,29 +1,45 @@
 import type { ParkingService } from '../types';
 import type { ParkingSession, ParkingZone } from '@/types';
 import { ramallahParkingZones } from '@/data/ramallahParking';
+import { normalizeGeoPoint } from '@/utils/coordinates';
+import { AppError } from '@/utils/errors';
 import { api, mutation, query, segment } from './apiClient';
 
 const collectedZoneMetadata = new Map(ramallahParkingZones.map((zone) => [zone.id, zone]));
 
 /** The API owns live availability; the collected dataset owns prototype metadata. */
-const enrichCollectedZone = (zone: ParkingZone): ParkingZone => {
+type ApiParkingZone = Omit<ParkingZone, 'location'> & {
+  location?: unknown;
+  latitude?: number | string;
+  longitude?: number | string;
+  lat?: number | string;
+  lng?: number | string;
+  lon?: number | string;
+};
+
+const normalizeZone = (zone: ApiParkingZone): ParkingZone => {
   const metadata = collectedZoneMetadata.get(zone.id);
+  const location = normalizeGeoPoint(zone.location) ?? normalizeGeoPoint(zone) ?? metadata?.location;
+  if (!location) {
+    throw new AppError('validation', `Parking zone ${zone.id} has invalid coordinates`);
+  }
+  const normalized = { ...zone, location };
   return metadata
     ? {
-        ...zone,
+        ...normalized,
         ownership: metadata.ownership,
         accessRestriction: metadata.accessRestriction,
         accessRestrictionAr: metadata.accessRestrictionAr,
         parkingAllowed: metadata.parkingAllowed,
         prototypeData: metadata.prototypeData,
-        availability: zone.availability === 'unknown' ? metadata.availability : zone.availability,
+        availability: normalized.availability === 'unknown' ? metadata.availability : normalized.availability,
       }
-    : zone;
+    : normalized;
 };
 
 export const httpParkingService: ParkingService = {
   async listZones(options) {
-    const zones = await api<ParkingZone[]>(
+    const zones = await api<ApiParkingZone[]>(
       '/parking/zones' +
         query({
           search: options?.search,
@@ -32,13 +48,13 @@ export const httpParkingService: ParkingService = {
           radius: options?.radiusMeters,
         }),
     );
-    return zones.map(enrichCollectedZone);
+    return zones.map(normalizeZone);
   },
   async getZone(id) {
-    return enrichCollectedZone(await api<ParkingZone>(`/parking/zones/${segment(id)}`));
+    return normalizeZone(await api<ApiParkingZone>(`/parking/zones/${segment(id)}`));
   },
   async getZoneByCode(code) {
-    return enrichCollectedZone(await api<ParkingZone>(`/parking/zones/code/${segment(code)}`));
+    return normalizeZone(await api<ApiParkingZone>(`/parking/zones/code/${segment(code)}`));
   },
   getFacility: (id) => api(`/parking/facilities/${segment(id)}`),
   getLayout: (id) => api(`/parking/zones/${segment(id)}/layout`),

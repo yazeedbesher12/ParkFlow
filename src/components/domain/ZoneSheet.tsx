@@ -118,7 +118,7 @@ export function ZoneSheet({
     );
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} testID="zone-sheet">
+    <BottomSheet visible={visible} onClose={onClose} scrollable testID="zone-sheet">
       <View style={{ gap: spacing.lg }}>
         <View style={{ flexDirection: row, alignItems: 'flex-start', gap: spacing.md }}>
           <View

@@ -1,12 +1,17 @@
 import source from './ramallah_parking_locations.json';
 import type { ParkingKind, ParkingZone, RamallahParkingDataset, RamallahParkingLocation } from '@/types';
+import { normalizeGeoPoint } from '@/utils/coordinates';
 
 /**
  * Single typed gateway to the supplied development dataset. Components consume
  * these objects directly so names, coordinates and prices are never duplicated.
  */
 export const ramallahParkingDataset = source as RamallahParkingDataset;
-export const ramallahParkingLocations = ramallahParkingDataset.parkingLocations;
+export const ramallahParkingLocations = ramallahParkingDataset.parkingLocations.map((location) => {
+  const normalized = normalizeGeoPoint(location.location);
+  if (!normalized) throw new Error(`Parking location ${location.id} has invalid coordinates`);
+  return { ...location, location: normalized };
+});
 
 const toParkingKind = (location: RamallahParkingLocation): ParkingKind => {
   if (location.ownership === 'private') return 'private';

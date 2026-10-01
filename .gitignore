@@ -69,6 +69,7 @@ Desktop.ini
 # Editors
 .vscode/
 .idea/
+AGENTS.md
 
 # Coverage anywhere
 coverage/

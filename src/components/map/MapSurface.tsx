@@ -15,6 +15,8 @@ import { EvStationMarker } from './EvStationMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { GeoPoint, GeoRegion } from '@/types';
+import { isValidGeoPoint, isValidGeoRegion, normalizeGeoPoints } from '@/utils/coordinates';
+import { DEFAULT_REGION } from '@/data/mapDefaults';
 
 /**
  * Default (web) implementation — react-native-maps has no browser build.
@@ -32,6 +34,82 @@ const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
 const SATELLITE = `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`;
 const ROADS = `${ESRI}/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}`;
 const PLACES = `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`;
+
+type EdgePadding = { top: number; right: number; bottom: number; left: number };
+type PendingFit = { coordinates: GeoPoint[]; edgePadding: EdgePadding; durationMs: number };
+
+function fitMapToCoordinates(map: L.Map, request: PendingFit): 'applied' | 'deferred' {
+  const coordinates = normalizeGeoPoints(request.coordinates);
+  if (!coordinates.length) return 'applied';
+
+  if (coordinates.length === 1) {
+    const point = coordinates[0]!;
+    const zoom = map.getZoom();
+    if (!Number.isFinite(zoom)) return 'deferred';
+    map.setView([point.latitude, point.longitude], zoom);
+    return 'applied';
+  }
+
+  const bounds = L.latLngBounds(
+    coordinates.map((point) => [point.latitude, point.longitude] as L.LatLngTuple),
+  );
+  if (!bounds.isValid()) return 'applied';
+
+  const size = map.getSize();
+  if (!Number.isFinite(size.x) || !Number.isFinite(size.y) || size.x <= 0 || size.y <= 0) {
+    return 'deferred';
+  }
+
+  const nonNegativeFinite = (value: number) =>
+    Number.isFinite(value) && value >= 0 ? value : 0;
+  const requested = {
+    top: nonNegativeFinite(request.edgePadding.top),
+    right: nonNegativeFinite(request.edgePadding.right),
+    bottom: nonNegativeFinite(request.edgePadding.bottom),
+    left: nonNegativeFinite(request.edgePadding.left),
+  };
+  const horizontalPadding = requested.left + requested.right;
+  const verticalPadding = requested.top + requested.bottom;
+  // Leaflet subtracts combined padding from the container before calculating zoom.
+  // Keep the usable size positive while a returning route screen is still resizing.
+  const paddingScale = Math.max(
+    0,
+    Math.min(
+      1,
+      horizontalPadding > 0 ? (size.x - 1) / horizontalPadding : 1,
+      verticalPadding > 0 ? (size.y - 1) / verticalPadding : 1,
+    ),
+  );
+  const padding = {
+    top: requested.top * paddingScale,
+    right: requested.right * paddingScale,
+    bottom: requested.bottom * paddingScale,
+    left: requested.left * paddingScale,
+  };
+  const duration = Number.isFinite(request.durationMs) && request.durationMs >= 0
+    ? request.durationMs / 1000
+    : 0;
+  const center = bounds.getCenter();
+  const zoom = map.getBoundsZoom(
+    bounds,
+    false,
+    L.point(padding.left + padding.right, padding.top + padding.bottom),
+  );
+  if (
+    !Number.isFinite(center.lat) ||
+    !Number.isFinite(center.lng) ||
+    !Number.isFinite(zoom)
+  ) {
+    return 'applied';
+  }
+
+  map.flyToBounds(bounds, {
+    paddingTopLeft: [padding.left, padding.top],
+    paddingBottomRight: [padding.right, padding.bottom],
+    duration,
+  });
+  return 'applied';
+}
 
 function toBounds(region: GeoRegion): L.LatLngBoundsExpression {
   return [
@@ -92,6 +170,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   const { colors } = useTheme();
   const hostRef = useRef<View>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const pendingFitRef = useRef<PendingFit | undefined>(undefined);
   // The last region we reported upward. The screen feeds it straight back in
   // as `region`, and re-fitting to our own echo would nudge the map in a loop.
   const emitted = useRef<GeoRegion | undefined>(undefined);
@@ -113,7 +192,8 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     L.tileLayer(SATELLITE, { maxZoom: 19, attribution: 'Imagery © Esri' }).addTo(map);
     L.tileLayer(ROADS, { maxZoom: 19 }).addTo(map);
     L.tileLayer(PLACES, { maxZoom: 19 }).addTo(map);
-    map.setView([region.latitude, region.longitude], 15);
+    const initialRegion = isValidGeoRegion(region) ? region : DEFAULT_REGION;
+    map.setView([initialRegion.latitude, initialRegion.longitude], 15);
 
     const redraw = () => setFrame((n) => n + 1);
     map.on('move zoom', redraw);
@@ -135,7 +215,11 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
       map.invalidateSize();
       if (!fitted && host.clientWidth > 0 && host.clientHeight > 0) {
         fitted = true;
-        map.fitBounds(toBounds(region));
+        map.fitBounds(toBounds(initialRegion));
+      }
+      const pendingFit = pendingFitRef.current;
+      if (pendingFit && fitMapToCoordinates(map, pendingFit) === 'applied') {
+        pendingFitRef.current = undefined;
       }
       redraw();
     });
@@ -153,51 +237,65 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   // Follow regions the screen asks for (first GPS fix, search result).
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || sameRegion(region, emitted.current)) return;
+    if (!map || !isValidGeoRegion(region) || sameRegion(region, emitted.current)) return;
     map.fitBounds(toBounds(region));
   }, [region]);
 
   // Routes are Leaflet polylines — they belong to the map, not the pin overlay.
   useEffect(() => {
+    if (!route) {
+      pendingFitRef.current = undefined;
+      return;
+    }
     const map = mapRef.current;
-    if (!map || !route) return;
+    if (!map) return;
     const toLatLngs = (line: GeoPoint[]) =>
       line.map((point) => [point.latitude, point.longitude] as L.LatLngTuple);
 
+    const mainLine = route.coordinates.filter(isValidGeoPoint);
+    if (mainLine.length !== route.coordinates.length || mainLine.length < 2) return;
+
     const layers = [
-      ...route.alternatives.map((line) =>
-        L.polyline(toLatLngs(line), {
-          color: colors.textTertiary,
-          weight: 4,
-          opacity: 0.85,
-          dashArray: '8 8',
-        }),
-      ),
+      ...route.alternatives
+        .filter((line) => line.length >= 2 && line.every(isValidGeoPoint))
+        .map((line) =>
+          L.polyline(toLatLngs(line), {
+            color: colors.textTertiary,
+            weight: 4,
+            opacity: 0.85,
+            dashArray: '8 8',
+          }),
+        ),
       // A light casing under the route keeps it readable on satellite imagery.
-      L.polyline(toLatLngs(route.coordinates), { color: colors.surface, weight: 9, opacity: 0.9 }),
-      L.polyline(toLatLngs(route.coordinates), { color: colors.brand, weight: 5 }),
+      L.polyline(toLatLngs(mainLine), { color: colors.surface, weight: 9, opacity: 0.9 }),
+      L.polyline(toLatLngs(mainLine), { color: colors.brand, weight: 5 }),
     ];
     layers.forEach((layer) => layer.addTo(map));
     return () => layers.forEach((layer) => layer.remove());
   }, [route, colors]);
 
   useImperativeHandle(ref, () => ({
-    animateToRegion: (next, durationMs = 600) =>
-      mapRef.current?.flyToBounds(toBounds(next), { duration: durationMs / 1000 }),
+    animateToRegion: (next, durationMs = 600) => {
+      if (!isValidGeoRegion(next)) return;
+      mapRef.current?.flyToBounds(toBounds(next), { duration: durationMs / 1000 });
+    },
     fitToCoordinates: (
       coordinates,
       edgePadding = { top: 80, right: 40, bottom: 160, left: 40 },
       durationMs = 600,
     ) => {
-      if (!coordinates.length) return;
-      const bounds = L.latLngBounds(
-        coordinates.map((point) => [point.latitude, point.longitude] as L.LatLngTuple),
-      );
-      mapRef.current?.flyToBounds(bounds, {
-        paddingTopLeft: [edgePadding.left, edgePadding.top],
-        paddingBottomRight: [edgePadding.right, edgePadding.bottom],
-        duration: durationMs / 1000,
-      });
+      const validCoordinates = normalizeGeoPoints(coordinates);
+      if (!validCoordinates.length) {
+        pendingFitRef.current = undefined;
+        return;
+      }
+      const request = { coordinates: validCoordinates, edgePadding, durationMs };
+      const map = mapRef.current;
+      if (!map || fitMapToCoordinates(map, request) === 'deferred') {
+        pendingFitRef.current = request;
+      } else {
+        pendingFitRef.current = undefined;
+      }
     },
   }));
 
@@ -205,8 +303,14 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   const project = (latitude: number, longitude: number) =>
     map!.latLngToContainerPoint([latitude, longitude]);
   const size = map?.getSize();
-  const userPoint = map && userLocation ? project(userLocation.latitude, userLocation.longitude) : null;
-  const testPoint = map && testLocation ? project(testLocation.latitude, testLocation.longitude) : null;
+  const userPoint =
+    map && isValidGeoPoint(userLocation)
+      ? project(userLocation.latitude, userLocation.longitude)
+      : null;
+  const testPoint =
+    map && isValidGeoPoint(testLocation)
+      ? project(testLocation.latitude, testLocation.longitude)
+      : null;
 
   return (
     <View style={[{ backgroundColor: colors.mapLand, overflow: 'hidden' }, style]}>
@@ -268,6 +372,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
           ) : null}
 
           {checkpoints?.map((checkpoint) => {
+            if (!isValidGeoPoint(checkpoint.location)) return null;
             const { x, y } = project(checkpoint.location.latitude, checkpoint.location.longitude);
             if (x < -80 || y < -40 || x > size.x + 80 || y > size.y + 40) return null;
 
@@ -289,6 +394,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
           })}
 
           {evStations?.map((station) => {
+            if (!isValidGeoPoint(station)) return null;
             const { x, y } = project(station.latitude, station.longitude);
             if (x < -50 || y < -50 || x > size.x + 50 || y > size.y + 50) return null;
             return <Pressable key={station.id} accessibilityRole="button" accessibilityLabel={station.name} accessibilityState={{ selected: station.id === selectedEvStationId }}
@@ -298,6 +404,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             </Pressable>;
           })}
           {roadReports?.map((report) => {
+            if (!isValidGeoPoint(report)) return null;
             const { x, y } = project(report.latitude, report.longitude);
             if (x < -50 || y < -50 || x > size.x + 50 || y > size.y + 50) return null;
             return (
@@ -314,12 +421,14 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
           })}
 
           {reportDraft ? (() => {
+            if (!isValidGeoPoint(reportDraft.location)) return null;
             const { x, y } = project(reportDraft.location.latitude, reportDraft.location.longitude);
             return <View pointerEvents="none" style={{ position: 'absolute', left: x - 24, top: y - 40, width: 48, alignItems: 'center', zIndex: 8 }}><RoadReportMarker type={reportDraft.type} selected /></View>;
           })() : null}
 
           {landmark
             ? (() => {
+                if (!isValidGeoPoint(landmark.location)) return null;
                 const { x, y } = project(landmark.location.latitude, landmark.location.longitude);
                 return (
                   <View
@@ -333,6 +442,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             : null}
 
           {parkingLocations?.map((location) => {
+            if (!isValidGeoPoint(location.location)) return null;
             const { x, y } = project(location.location.latitude, location.location.longitude);
             if (x < -60 || y < -60 || x > size.x + 60 || y > size.y + 60) return null;
 
@@ -360,6 +470,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
           })}
 
           {zones.map((zone) => {
+            if (!isValidGeoPoint(zone.location)) return null;
             const { x, y } = project(zone.location.latitude, zone.location.longitude);
             // Skip pins that fall outside the visible surface.
             if (x < -60 || y < -60 || x > size.x + 60 || y > size.y + 60) return null;
