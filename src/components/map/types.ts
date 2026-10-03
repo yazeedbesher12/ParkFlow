@@ -8,6 +8,8 @@ import type {
   RoadReport,
   RoadReportType,
   RouteTrafficSegment,
+  CarServiceBusiness,
+  CarServiceCategory,
 } from '@/types';
 
 export interface MapCheckpoint {
@@ -37,6 +39,11 @@ export interface MapLandmark {
  * so the app is fully previewable in a browser. Screens only ever see this interface.
  */
 export interface MapSurfaceProps {
+  carServices?: CarServiceBusiness[];
+  activeCarServiceCategory?: CarServiceCategory;
+  selectedCarServiceId?: string;
+  onSelectCarService?: (service: CarServiceBusiness) => void;
+  carServiceAccessibilityLabel?: (service: CarServiceBusiness) => string;
   evStations?: import('@/types').EvChargingStation[];
   selectedEvStationId?: string;
   onSelectEvStation?: (station: import('@/types').EvChargingStation) => void;

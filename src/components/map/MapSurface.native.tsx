@@ -11,10 +11,12 @@ import {
 import { TestLocationMarker } from './TestLocationMarker';
 import { RoadReportMarker } from './RoadReportMarker';
 import { EvStationMarker } from './EvStationMarker';
+import { CarServiceMarker } from './CarServiceMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import { mapStyleDark, mapStyleLight } from './mapStyle';
 import type { RouteTrafficState } from '@/types';
+import { isValidGeoPoint } from '@/utils/coordinates';
 
 const TRAFFIC_COLORS: Record<RouteTrafficState, string> = {
   normal: '#16A34A',
@@ -43,6 +45,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     checkpoints,
     onSelectCheckpoint,
     evStations, selectedEvStationId, onSelectEvStation,
+    carServices, activeCarServiceCategory, selectedCarServiceId, onSelectCarService, carServiceAccessibilityLabel,
     roadReports,
     selectedRoadReportId,
     onSelectRoadReport,
@@ -142,6 +145,13 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             <EvStationMarker status={station.status} selected={station.id === selectedEvStationId} />
           </Marker>
         ))}
+        {carServices?.map((service) => activeCarServiceCategory && isValidGeoPoint({ latitude: service.latitude, longitude: service.longitude }) ? (
+          <Marker key={`${service.id}-${activeCarServiceCategory}-${service.id === selectedCarServiceId}`} coordinate={{ latitude: service.latitude, longitude: service.longitude }} anchor={{ x: 0.5, y: 0.5 }}
+            accessibilityLabel={carServiceAccessibilityLabel?.(service) ?? service.nameEn} tracksViewChanges={false} zIndex={service.id === selectedCarServiceId ? 60 : 30}
+            onPress={(event) => { event.stopPropagation(); onSelectCarService?.(service); }}>
+            <CarServiceMarker category={activeCarServiceCategory} selected={service.id === selectedCarServiceId} />
+          </Marker>
+        ) : null)}
         {roadReports?.map((report) => (
           <Marker
             key={report.id}

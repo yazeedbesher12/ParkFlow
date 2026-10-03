@@ -23,10 +23,13 @@ import { MapLayersSheet } from '@/components/map/MapLayersSheet';
 import { EvStationDetailsSheet } from '@/components/map/EvStationDetailsSheet';
 import { EvFiltersSheet } from '@/components/map/EvFiltersSheet';
 import { EvMapStatus } from '@/components/map/EvMapStatus';
+import { CarServiceDetailsSheet } from '@/components/map/CarServiceDetailsSheet';
+import { CarServiceMapStatus } from '@/components/map/CarServiceMapStatus';
 import { DestinationSearchBox } from '@/components/map/DestinationSearchBox';
 import { DestinationParkingPanel } from '@/components/map/DestinationParkingPanel';
 import { useEvStations } from '@/hooks/useEvStations';
-import { evDestination, parkingDestination, type EvChargingStation, type RouteDestination } from '@/types';
+import { useCarServices } from '@/hooks/useCarServices';
+import { carServiceDestination, evDestination, parkingDestination, type CarServiceBusiness, type EvChargingStation, type RouteDestination } from '@/types';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
@@ -117,11 +120,14 @@ export default function MapScreen() {
   );
 
   const primaryMapCategory = useMapLayersStore((state) => state.primaryCategory);
+  const carServiceCategory = useMapLayersStore((state) => state.carServiceCategory);
   const pendingReservationRouteZoneId = useReservationRouteStore((state) => state.pendingZoneId);
   const storedRouteOrigin = useReservationRouteStore((state) => state.origin);
   const storedRouteOriginMode = useReservationRouteStore((state) => state.originMode);
   const evActive = primaryMapCategory === 'ev_charging';
   const ev = useEvStations(evActive, region);
+  const carServicesActive = primaryMapCategory === 'car_services';
+  const carServices = useCarServices(carServicesActive, region, carServiceCategory);
   useEffect(() => { if (!evActive) setEvFiltersOpen(false); }, [evActive]);
   const roadReportsEnabled = useMapLayersStore((state) => state.roadReportsEnabled);
   const businessOffersEnabled = useMapLayersStore((state) => state.businessOffersEnabled);
@@ -529,6 +535,21 @@ export default function MapScreen() {
     if (zone) openZone(zone);
   }, [openZone, zones]);
 
+  const selectCarService = useCallback((service: CarServiceBusiness) => {
+    haptics.select();
+    setSelectedZoneId(undefined);
+    setSelectedReport(undefined);
+    setEntryMenuOpen(false);
+    setReportStep(undefined);
+    setReportLocationPicking(false);
+    carServices.select(service);
+  }, [carServices.select]);
+
+  const carServiceAccessibilityLabel = useCallback((service: CarServiceBusiness) => {
+    const name = locale === 'ar' ? service.nameAr : service.nameEn;
+    return `${name}, ${t(`carServices.category.${carServiceCategory}`)}`;
+  }, [carServiceCategory, locale, t]);
+
   const closeRoute = useCallback(() => {
     setRouteTarget(undefined);
     setRouteDetailsExpanded(false);
@@ -648,8 +669,11 @@ export default function MapScreen() {
 
   // Never stack the EV modal with the existing map sheets.
   useEffect(() => {
-    if (selectedZoneId || selectedReport || reportStep || reportLocationPicking || layersSheetOpen || vehicleSheetOpen || codeSheetOpen || evFiltersOpen) ev.select(undefined);
-  }, [selectedZoneId, selectedReport, reportStep, reportLocationPicking, layersSheetOpen, vehicleSheetOpen, codeSheetOpen, evFiltersOpen, ev.select]);
+    if (selectedZoneId || selectedReport || reportStep || reportLocationPicking || layersSheetOpen || vehicleSheetOpen || codeSheetOpen || evFiltersOpen) {
+      ev.select(undefined);
+      carServices.select(undefined);
+    }
+  }, [selectedZoneId, selectedReport, reportStep, reportLocationPicking, layersSheetOpen, vehicleSheetOpen, codeSheetOpen, evFiltersOpen, ev.select, carServices.select]);
 
   return (
     <View style={{ flex: 1, overflow: 'hidden', backgroundColor: colors.background }}>
@@ -661,6 +685,11 @@ export default function MapScreen() {
         evStations={evActive ? ev.stations : []}
         selectedEvStationId={evActive ? ev.selectedStationId : undefined}
         onSelectEvStation={selectEvStation}
+        carServices={carServicesActive ? carServices.services : []}
+        activeCarServiceCategory={carServicesActive ? carServiceCategory : undefined}
+        selectedCarServiceId={carServicesActive ? carServices.selectedServiceId : undefined}
+        onSelectCarService={selectCarService}
+        carServiceAccessibilityLabel={carServiceAccessibilityLabel}
         zones={primaryMapCategory === 'parking' ? mapZones.map((item) => item.zone) : []}
         selectedZoneId={primaryMapCategory === 'parking' ? selectedZoneId ?? routeZone?.id : undefined}
         parkingLocations={primaryMapCategory === 'parking' ? ramallahParkingLocations : []}
@@ -670,6 +699,7 @@ export default function MapScreen() {
         onPressMap={handleMapPress}
         onPressBackground={() => {
           ev.select(undefined);
+          carServices.select(undefined);
           setSelectedZoneId(undefined);
           setSelectedReport(undefined);
           setEntryMenuOpen(false);
@@ -683,7 +713,7 @@ export default function MapScreen() {
         selectedRoadReportId={roadReportsEnabled ? selectedReport?.id : undefined}
         onSelectRoadReport={(report) => {
           setSelectedZoneId(undefined);
-          if (routeTarget?.type !== 'ev_station') setRouteTarget(undefined);
+          if (routeTarget?.type !== 'ev_station' && routeTarget?.type !== 'car_service') setRouteTarget(undefined);
           setReportStep(undefined);
           setReportLocationPicking(false);
           setSelectedReport(report);
@@ -808,6 +838,9 @@ export default function MapScreen() {
             onOpenDestination={routeTarget.type === 'ev_station' ? () => {
               useMapLayersStore.getState().setPrimaryCategory('ev_charging');
               selectEvStation(routeTarget.station);
+            } : routeTarget.type === 'car_service' ? () => {
+              useMapLayersStore.getState().setPrimaryCategory('car_services');
+              carServices.select(routeTarget.service);
             } : undefined}
             startDisabled={routeZone?.parkingAllowed === false}
             impacts={activeRouteAssessment?.impacts}
@@ -846,6 +879,19 @@ export default function MapScreen() {
         {evActive && !reportStep && !reportLocationPicking && !selectedReport && !ev.selectedStationId ? (
           <EvMapStatus loading={ev.loading} error={ev.error} count={ev.stations.length} truncated={ev.truncated} filters={ev.filters}
             retry={ev.retry} onFilters={() => setEvFiltersOpen(true)} compact={Boolean(routeTarget)} />
+        ) : null}
+        {carServicesActive && !reportStep && !reportLocationPicking && !selectedReport && !carServices.selectedServiceId ? (
+          <CarServiceMapStatus
+            loading={carServices.loading}
+            error={carServices.error}
+            errorMessage={carServices.errorMessage}
+            count={carServices.services.length}
+            services={carServices.services}
+            truncated={carServices.truncated}
+            category={carServiceCategory}
+            retry={carServices.retry}
+            compact={Boolean(routeTarget)}
+          />
         ) : null}
       </View>
 
@@ -918,6 +964,8 @@ export default function MapScreen() {
       <MapLayersSheet visible={layersSheetOpen} onClose={() => setLayersSheetOpen(false)} />
       <EvStationDetailsSheet key={ev.selectedStationId ?? 'closed-ev'} station={evActive ? ev.selectedStation : undefined}
         onClose={() => ev.select(undefined)} onRoute={(station) => void startRoute(evDestination(station))} />
+      <CarServiceDetailsSheet key={carServices.selectedServiceId ?? 'closed-car-service'} service={carServicesActive ? carServices.selectedService : undefined}
+        onClose={() => carServices.select(undefined)} onRoute={(service) => void startRoute(carServiceDestination(service))} />
       <EvFiltersSheet visible={evActive && evFiltersOpen} onClose={() => setEvFiltersOpen(false)} />
     </View>
   );

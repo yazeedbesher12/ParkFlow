@@ -118,7 +118,7 @@ export function CompactRoutePanel({
 }: CompactRoutePanelProps) {
   const { colors } = useTheme();
   const { t, locale, row } = useLocale();
-  const name = locale === 'ar' && destination.type === 'parking' ? destination.nameAr : destination.name;
+  const name = locale === 'ar' && (destination.type === 'parking' || destination.type === 'car_service') ? destination.nameAr : destination.name;
   const Chevron = detailsExpanded ? ChevronDown : ChevronUp;
   const primaryImpact = impacts[0];
   const issueName = primaryImpact ? t(`roadReports.type.${primaryImpact.report.type}`) : '';

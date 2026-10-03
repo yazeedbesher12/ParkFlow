@@ -12,6 +12,7 @@ import {
 import { TestLocationMarker } from './TestLocationMarker';
 import { RoadReportMarker } from './RoadReportMarker';
 import { EvStationMarker } from './EvStationMarker';
+import { CarServiceMarker } from './CarServiceMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { GeoPoint, GeoRegion, RouteTrafficState } from '@/types';
@@ -178,6 +179,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     checkpoints,
     onSelectCheckpoint,
     evStations, selectedEvStationId, onSelectEvStation,
+    carServices, activeCarServiceCategory, selectedCarServiceId, onSelectCarService, carServiceAccessibilityLabel,
     roadReports,
     selectedRoadReportId,
     onSelectRoadReport,
@@ -443,6 +445,16 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
               onPress={() => onSelectEvStation?.(station)}
               style={{ position: 'absolute', left: x - 24, top: y - 24, width: 48, height: 48, zIndex: station.id === selectedEvStationId ? 6 : 3 }}>
               <EvStationMarker status={station.status} selected={station.id === selectedEvStationId} />
+            </Pressable>;
+          })}
+          {carServices?.map((service) => {
+            if (!activeCarServiceCategory || !isValidGeoPoint({ latitude: service.latitude, longitude: service.longitude })) return null;
+            const { x, y } = project(service.latitude, service.longitude);
+            if (x < -50 || y < -50 || x > size.x + 50 || y > size.y + 50) return null;
+            return <Pressable key={service.id} accessibilityRole="button" accessibilityLabel={carServiceAccessibilityLabel?.(service) ?? service.nameEn} accessibilityState={{ selected: service.id === selectedCarServiceId }}
+              onPress={() => onSelectCarService?.(service)}
+              style={{ position: 'absolute', left: x - 24, top: y - 24, width: 48, height: 48, zIndex: service.id === selectedCarServiceId ? 6 : 3 }}>
+              <CarServiceMarker category={activeCarServiceCategory} selected={service.id === selectedCarServiceId} />
             </Pressable>;
           })}
           {roadReports?.map((report) => {

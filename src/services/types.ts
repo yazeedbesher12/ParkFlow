@@ -253,6 +253,7 @@ export interface TrustService {
 
 export interface Services {
   evStations: import('../types/evStation').EvStationApi;
+  carServices: import('../types/carService').CarServiceApi;
   auth: AuthService;
   vehicles: VehicleService;
   parking: ParkingService;
