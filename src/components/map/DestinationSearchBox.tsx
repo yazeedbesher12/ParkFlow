@@ -1,7 +1,11 @@
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
-import { MapPin } from 'lucide-react-native';
+import { MapPin, Mic } from 'lucide-react-native';
 import { AppText, PressableScale, SearchField } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
+import { useSpeechRecognitionEvent } from 'expo-speech-recognition';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import { deliverNativeResult, extractPlaceQuery, isVoiceSearchSupported, listenOnce } from '@/utils/voice';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { shadow } from '@/theme/shadows';
@@ -29,16 +33,66 @@ export function DestinationSearchBox({
 }: Props) {
   const { colors } = useTheme();
   const { t, row } = useLocale();
+  const voiceLanguage = usePreferencesStore((s) => s.voiceLanguage);
   const hasQuery = value.trim().length >= 2;
+  const [listening, setListening] = useState(false);
+  const cancelRef = useRef<(() => void) | undefined>(undefined);
+  const voiceSupported = isVoiceSearchSupported();
+
+  // Device recogniser events. Web uses its own callbacks, so these only matter natively.
+  useSpeechRecognitionEvent('result', (event) => deliverNativeResult(event.results[0]?.transcript ?? ''));
+  useSpeechRecognitionEvent('error', () => deliverNativeResult(''));
+  useSpeechRecognitionEvent('end', () => deliverNativeResult(''));
+
+  // Stop the mic if the search box unmounts mid-listen.
+  useEffect(() => () => cancelRef.current?.(), []);
+
+  const toggleVoice = () => {
+    if (listening) {
+      cancelRef.current?.();
+      setListening(false);
+      return;
+    }
+    setListening(true);
+    cancelRef.current = listenOnce(voiceLanguage, (transcript) => {
+      setListening(false);
+      if (transcript) onChange(extractPlaceQuery(transcript));
+    });
+  };
+
+  const trailing = loading ? (
+    <ActivityIndicator size="small" color={colors.brand} />
+  ) : voiceSupported ? (
+    <PressableScale
+      onPress={toggleVoice}
+      haptic="light"
+      accessibilityRole="button"
+      accessibilityLabel={listening ? t('voice.stop') : t('voice.search')}
+      accessibilityState={{ selected: listening }}
+      hitSlop={8}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: listening ? colors.brand : colors.brandSofter,
+      }}
+    >
+      <Mic size={16} color={listening ? colors.onBrand : colors.brand} strokeWidth={2.2} />
+    </PressableScale>
+  ) : undefined;
 
   return (
-    <View style={{ gap: spacing.xs }}>
+    // The map's control rail floats in the same row at the end edge, so the
+    // search field stops short of it; otherwise the mic button sits underneath.
+    <View style={{ gap: spacing.xs, paddingEnd: 56 }}>
       <SearchField
         value={value}
         onChangeText={onChange}
-        placeholder={t('map.search')}
+        placeholder={listening ? t('voice.listening') : t('map.search')}
         tone="surface"
-        trailing={loading ? <ActivityIndicator size="small" color={colors.brand} /> : undefined}
+        trailing={trailing}
         style={shadow.sm}
       />
       {showSuggestions && hasQuery ? (

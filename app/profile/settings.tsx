@@ -12,6 +12,7 @@ import {
   PressableScale,
   Screen,
   SectionHeader,
+  Segmented,
   SwitchRow,
 } from '@/components/ui';
 
@@ -48,6 +49,10 @@ export default function SettingsScreen() {
   const notifications = preferenceQuery.data ?? {parkingReminders:true,expiryWarnings:true,lowBalance:true,violations:true,promotions:false};
   const updatePreferences = useMutation({mutationFn:(next:NotificationPreferences)=>api<NotificationPreferences>('/users/me/notification-preferences',{method:'PATCH',body:next}),onSuccess:data=>queryClient.setQueryData(['notification-preferences',userId],data)});
   const setNotificationPreference = (key:keyof NotificationPreferences,value:boolean) => updatePreferences.mutate({...notifications,[key]:value});
+  const voiceAlerts = usePreferencesStore((s) => s.voiceAlerts);
+  const setVoiceAlerts = usePreferencesStore((s) => s.setVoiceAlerts);
+  const voiceLanguage = usePreferencesStore((s) => s.voiceLanguage);
+  const setVoiceLanguage = usePreferencesStore((s) => s.setVoiceLanguage);
 
   const themeOptions: ThemeMode[] = ['light', 'dark', 'system'];
 
@@ -141,6 +146,31 @@ export default function SettingsScreen() {
               );
             })}
           </View>
+        </View>
+
+        {/* ---- Voice --------------------------------------------------------- */}
+        <View>
+          <SectionHeader title={t('profile.voiceAlerts')} />
+          <Card padding="lg">
+            <SwitchRow
+              label={t('profile.voiceAlerts')}
+              description={t('profile.voiceAlertsBody')}
+              value={voiceAlerts}
+              onValueChange={setVoiceAlerts}
+            />
+            <Divider style={{ marginVertical: spacing.md }} />
+            <AppText variant="label" color="textSecondary" style={{ marginBottom: spacing.sm }}>
+              {t('profile.voiceLanguage')}
+            </AppText>
+            <Segmented
+              options={[
+                { value: 'ar' as const, label: localeNames.ar },
+                { value: 'en' as const, label: localeNames.en },
+              ]}
+              value={voiceLanguage}
+              onChange={setVoiceLanguage}
+            />
+          </Card>
         </View>
 
         {/* ---- Notifications ---------------------------------------------- */}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -43,6 +43,8 @@ import { formatDuration, formatDurationShort, formatTime, secondsBetween } from 
 import { formatMoney, formatRate } from '@/utils/money';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
+import { speak } from '@/utils/voice';
+import { usePreferencesStore } from '@/store/preferencesStore';
 
 export default function ActiveParkingScreen() {
   const router = useRouter();
@@ -71,6 +73,29 @@ export default function ActiveParkingScreen() {
       router.replace(`/parking/receipt/${session.id}`);
     }
   }, [session, router]);
+
+  // Spoken alerts fire once per session, and only when the user opted in.
+  const voiceAlerts = usePreferencesStore((s) => s.voiceAlerts);
+  const alerted = useRef({ tenMinutes: false, overstay: false });
+  useEffect(() => {
+    if (!voiceAlerts || !session || session.status !== 'ACTIVE' || !breakdown) return;
+    if (breakdown.isOverstay && !alerted.current.overstay) {
+      alerted.current.overstay = true;
+      speak(t('voice.overstay'), locale);
+      return;
+    }
+    const remaining = breakdown.remainingSeconds;
+    if (
+      session.parkingMode === 'prepaid' &&
+      remaining !== undefined &&
+      remaining > 0 &&
+      remaining <= 600 &&
+      !alerted.current.tenMinutes
+    ) {
+      alerted.current.tenMinutes = true;
+      speak(t('voice.tenMinutes'), locale);
+    }
+  }, [voiceAlerts, session, breakdown, t, locale]);
 
   if (isError) {
     return (

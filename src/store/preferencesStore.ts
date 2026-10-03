@@ -14,6 +14,10 @@ interface PreferencesState {
   notifications: NotificationPreferences;
   /** True once the first-run flow (email -> name -> vehicle) has finished. */
   onboardingComplete: boolean;
+  /** Speak parking-time alerts aloud. Opt-in, kept on this device only. */
+  voiceAlerts: boolean;
+  /** Language the microphone listens in. Separate from the app language. */
+  voiceLanguage: 'ar' | 'en';
   /** True once persisted preferences have been read — describes this run only. */
   hydrated: boolean;
 
@@ -22,6 +26,8 @@ interface PreferencesState {
   setSelectedVehicleId: (id?: string) => void;
   setNotificationPreference: (key: keyof NotificationPreferences, value: boolean) => void;
   completeOnboarding: () => void;
+  setVoiceAlerts: (enabled: boolean) => void;
+  setVoiceLanguage: (language: 'ar' | 'en') => void;
   setHydrated: () => void;
   reset: () => void;
 }
@@ -42,6 +48,8 @@ export const usePreferencesStore = create<PreferencesState>()(
       selectedVehicleId: undefined,
       notifications: defaultNotifications,
       onboardingComplete: false,
+      voiceAlerts: false,
+      voiceLanguage: 'ar',
       hydrated: false,
 
       setLocale: (locale) => set({ locale }),
@@ -50,6 +58,8 @@ export const usePreferencesStore = create<PreferencesState>()(
       setNotificationPreference: (key, value) =>
         set((state) => ({ notifications: { ...state.notifications, [key]: value } })),
       completeOnboarding: () => set({ onboardingComplete: true }),
+      setVoiceAlerts: (voiceAlerts) => set({ voiceAlerts }),
+      setVoiceLanguage: (voiceLanguage) => set({ voiceLanguage }),
       setHydrated: () => set({ hydrated: true }),
       reset: () =>
         set({
@@ -71,6 +81,8 @@ export const usePreferencesStore = create<PreferencesState>()(
         selectedVehicleId: state.selectedVehicleId,
 
         onboardingComplete: state.onboardingComplete,
+        voiceAlerts: state.voiceAlerts,
+        voiceLanguage: state.voiceLanguage,
       }),
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },
