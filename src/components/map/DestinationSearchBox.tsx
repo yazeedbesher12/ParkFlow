@@ -5,7 +5,7 @@ import { AppText, PressableScale, SearchField } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
 import { useSpeechRecognitionEvent } from 'expo-speech-recognition';
 import { usePreferencesStore } from '@/store/preferencesStore';
-import { deliverNativeResult, extractPlaceQuery, isVoiceSearchSupported, listenOnce } from '@/utils/voice';
+import { deliverNativeResult, isVoiceSearchSupported, listenOnceBilingual } from '@/utils/voice';
 import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { shadow } from '@/theme/shadows';
@@ -32,7 +32,7 @@ export function DestinationSearchBox({
   onSelect,
 }: Props) {
   const { colors } = useTheme();
-  const { t, row } = useLocale();
+  const { t, row, locale } = useLocale();
   const voiceLanguage = usePreferencesStore((s) => s.voiceLanguage);
   const hasQuery = value.trim().length >= 2;
   const [listening, setListening] = useState(false);
@@ -54,9 +54,9 @@ export function DestinationSearchBox({
       return;
     }
     setListening(true);
-    cancelRef.current = listenOnce(voiceLanguage, (transcript) => {
+    cancelRef.current = listenOnceBilingual(voiceLanguage, (transcript) => {
       setListening(false);
-      if (transcript) onChange(extractPlaceQuery(transcript));
+      if (transcript) onChange(transcript);
     });
   };
 
@@ -126,7 +126,7 @@ export function DestinationSearchBox({
                   key={item.id}
                   onPress={() => onSelect(item)}
                   accessibilityRole="button"
-                  accessibilityLabel={item.name}
+                  accessibilityLabel={locale === 'ar' ? item.nameAr ?? item.name : item.nameEn ?? item.name}
                   style={{
                     flexDirection: row,
                     alignItems: 'center',
@@ -150,7 +150,9 @@ export function DestinationSearchBox({
                     <MapPin size={16} color={colors.brand} strokeWidth={2.2} />
                   </View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <AppText variant="label" numberOfLines={1}>{item.name}</AppText>
+                    <AppText variant="label" numberOfLines={1}>
+                      {locale === 'ar' ? item.nameAr ?? item.name : item.nameEn ?? item.name}
+                    </AppText>
                     <AppText variant="caption" color="textSecondary" numberOfLines={1}>
                       {[item.category, item.address].filter(Boolean).join(' · ')}
                     </AppText>

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { I18nManager, Platform } from 'react-native';
 import {
   intlLocale,
@@ -35,6 +35,15 @@ export function useLocale(): LocaleContext {
   const setStoredLocale = usePreferencesStore((s) => s.setLocale);
 
   const isRTL = isRtlLocale(locale);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      I18nManager.allowRTL(isRTL);
+    } else if (typeof document !== 'undefined') {
+      document.documentElement.dir = isRTL ? 'rtl' : 'ltr';
+      document.documentElement.lang = locale;
+    }
+  }, [isRTL, locale]);
 
   const t = useCallback(
     (key: TranslationKey, params?: Record<string, string | number>) =>

@@ -33,6 +33,8 @@ export function SearchField({
 }: SearchFieldProps) {
   const { colors } = useTheme();
   const { row, textAlign, isRTL, t } = useLocale();
+  const inputTextAlign = value.length > 0 ? (/[\u0600-\u06ff]/.test(value) ? 'right' : 'left') : textAlign;
+  const inputDirection = value.length > 0 ? (/[\u0600-\u06ff]/.test(value) ? 'rtl' : 'ltr') : undefined;
 
   return (
     <View
@@ -69,7 +71,8 @@ export function SearchField({
           fontFamily: isRTL ? systemFallback : fontFamily.medium,
           fontWeight: isRTL ? '500' : undefined,
           fontSize: 15,
-          textAlign,
+          textAlign: inputTextAlign,
+          writingDirection: inputDirection,
           paddingVertical: 0,
         }}
       />

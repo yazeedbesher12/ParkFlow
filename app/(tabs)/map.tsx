@@ -200,7 +200,7 @@ export default function MapScreen() {
     setPlaceSearchLoading(true);
     setPlaceSearchError(false);
     const timeout = setTimeout(() => {
-      searchPlaces(query)
+      searchPlaces(query, { center: { latitude: region.latitude, longitude: region.longitude } })
         .then((results) => {
           if (!cancelled) setPlaceSuggestions(results);
         })
@@ -218,7 +218,7 @@ export default function MapScreen() {
       cancelled = true;
       clearTimeout(timeout);
     };
-  }, [destinationQuery, selectedDestination?.name]);
+  }, [destinationQuery, region.latitude, region.longitude, selectedDestination?.name]);
 
   const alerts = useMemo(
     () =>
@@ -491,7 +491,7 @@ export default function MapScreen() {
   const selectDestination = useCallback((suggestion: PlaceSuggestion) => {
     haptics.select();
     setSelectedDestination(suggestion);
-    setDestinationQuery(suggestion.name);
+    setDestinationQuery(locale === 'ar' ? suggestion.nameAr ?? suggestion.name : suggestion.nameEn ?? suggestion.name);
     setSuggestionsOpen(false);
     setPlaceSuggestions([]);
     setSelectedZoneId(undefined);
@@ -506,7 +506,7 @@ export default function MapScreen() {
     };
     setRegion(next);
     mapRef.current?.animateToRegion(next, 450);
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!mapFocused || !pendingReservationRouteZoneId) return;

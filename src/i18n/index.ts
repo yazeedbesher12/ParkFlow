@@ -3,7 +3,9 @@ import { ar } from './ar';
 
 export type Locale = 'en' | 'ar';
 
-export const LOCALES: Locale[] = ['en', 'ar'];
+export const DEFAULT_LOCALE: Locale = 'ar';
+
+export const LOCALES: Locale[] = ['ar', 'en'];
 
 export const localeNames: Record<Locale, string> = {
   en: 'English',

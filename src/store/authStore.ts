@@ -31,6 +31,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
 
   hydrate: async () => {
     try {
+      if (__DEV__ && process.env.EXPO_PUBLIC_START_FROM_BEGINNING === 'true') {
+        await secureStorage.removeItem(STORAGE_KEYS.authSession).catch(() => undefined);
+        set({ session: undefined, user: undefined, hydrated: true });
+        return;
+      }
+
       const raw = await secureStorage.getItem(STORAGE_KEYS.authSession);
       if (!raw) {
         set({ hydrated: true });

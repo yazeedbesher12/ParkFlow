@@ -92,6 +92,38 @@ export function listenOnce(
   };
 }
 
+/**
+ * Destination search accepts either supported language. The selected voice
+ * language is only the first recogniser to try; it is not tied to app locale.
+ */
+export function listenOnceBilingual(
+  preferred: VoiceLanguage,
+  onDone: (transcript: string) => void,
+): (() => void) | undefined {
+  const order: VoiceLanguage[] = preferred === 'ar' ? ['ar', 'en'] : ['en', 'ar'];
+  let cancelled = false;
+  let currentCancel: (() => void) | undefined;
+
+  const listenAt = (index: number) => {
+    currentCancel = listenOnce(order[index]!, (transcript) => {
+      if (cancelled) return;
+      if (transcript || index === order.length - 1) {
+        onDone(transcript);
+        return;
+      }
+      listenAt(index + 1);
+    });
+    if (!currentCancel && index < order.length - 1) listenAt(index + 1);
+    else if (!currentCancel) onDone('');
+  };
+
+  listenAt(0);
+  return () => {
+    cancelled = true;
+    currentCancel?.();
+  };
+}
+
 /** Speaks a short alert. Failures are silent: an alert must never break the screen. */
 export function speak(text: string, locale: Locale): void {
   try {

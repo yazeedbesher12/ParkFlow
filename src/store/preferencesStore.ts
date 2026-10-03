@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { NotificationPreferences } from '@/types';
-import type { Locale } from '@/i18n';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n';
 import { appStorage, STORAGE_KEYS } from '@/services/storage';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 interface PreferencesState {
   locale: Locale;
+  /** False for old installs that still had the original English default. */
+  localeChosen: boolean;
   themeMode: ThemeMode;
   /** Which of the user's vehicles the map / start-parking flow is aimed at. */
   selectedVehicleId?: string;
@@ -43,7 +45,8 @@ const defaultNotifications: NotificationPreferences = {
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
-      locale: 'en',
+      locale: DEFAULT_LOCALE,
+      localeChosen: false,
       themeMode: 'light',
       selectedVehicleId: undefined,
       notifications: defaultNotifications,
@@ -52,7 +55,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       voiceLanguage: 'ar',
       hydrated: false,
 
-      setLocale: (locale) => set({ locale }),
+      setLocale: (locale) => set({ locale, localeChosen: true }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setSelectedVehicleId: (selectedVehicleId) => set({ selectedVehicleId }),
       setNotificationPreference: (key, value) =>
@@ -63,6 +66,8 @@ export const usePreferencesStore = create<PreferencesState>()(
       setHydrated: () => set({ hydrated: true }),
       reset: () =>
         set({
+          locale: DEFAULT_LOCALE,
+          localeChosen: false,
           selectedVehicleId: undefined,
           notifications: defaultNotifications,
           onboardingComplete: false,
@@ -70,13 +75,24 @@ export const usePreferencesStore = create<PreferencesState>()(
     }),
     {
       name: STORAGE_KEYS.preferences,
+      version: 2,
       storage: createJSONStorage(() => ({
         getItem: (name) => appStorage.getItem(name),
         setItem: (name, value) => appStorage.setItem(name, value),
         removeItem: (name) => appStorage.removeItem(name),
       })),
+      migrate: (persisted) => {
+        const state = persisted as Partial<PreferencesState> | undefined;
+        if (!state) return persisted;
+        return {
+          ...state,
+          locale: state.localeChosen ? state.locale ?? DEFAULT_LOCALE : DEFAULT_LOCALE,
+          localeChosen: Boolean(state.localeChosen),
+        };
+      },
       partialize: (state) => ({
         locale: state.locale,
+        localeChosen: state.localeChosen,
         themeMode: state.themeMode,
         selectedVehicleId: state.selectedVehicleId,
 

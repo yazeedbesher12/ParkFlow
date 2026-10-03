@@ -366,7 +366,7 @@ export const en = {
   'profile.theme.system': 'System',
   'profile.notifications': 'Notification preferences',
   'profile.voiceAlerts': 'Spoken parking alerts',
-  'profile.voiceLanguage': 'Voice search language',
+  'profile.voiceLanguage': 'Preferred voice language',
   'profile.voiceAlertsBody': 'Hear a short alert when your time is almost up or has ended.',
   'voice.search': 'Search by voice',
   'voice.stop': 'Stop listening',

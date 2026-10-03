@@ -1,3 +1,5 @@
+import { usePreferencesStore } from '@/store/preferencesStore';
+
 export type AppErrorCode =
   | 'network'
   | 'unauthorized'
@@ -31,9 +33,23 @@ export function toAppError(error: unknown): AppError {
   return new AppError('unknown', 'Something went wrong');
 }
 
-/** Copy shown to the user — deliberately short and non-technical. */
+const ARABIC_MESSAGES: Record<AppErrorCode, string> = {
+  network: 'لا يوجد اتصال. تحقق من الإنترنت وحاول مرة أخرى.',
+  unauthorized: 'انتهت جلستك. يرجى تسجيل الدخول مرة أخرى.',
+  not_found: 'لم نتمكن من العثور على ما تبحث عنه.',
+  validation: 'يرجى التحقق من البيانات والمحاولة مرة أخرى.',
+  conflict: 'تعذّر تنفيذ الطلب بسبب تعارض في البيانات.',
+  insufficient_funds: 'رصيد محفظتك غير كافٍ لهذه الدفعة.',
+  payment_failed: 'تعذّر إتمام عملية الدفع.',
+  unknown: 'حدث خطأ ما. حاول مرة أخرى.',
+};
+
+/** Copy shown to the user. Deliberately short and non-technical. */
 export function errorMessage(error: unknown): string {
   const appError = toAppError(error);
+  const locale = usePreferencesStore.getState().locale;
+  if (locale === 'ar') return ARABIC_MESSAGES[appError.code];
+
   switch (appError.code) {
     case 'network':
       return 'No connection. Check your internet and try again.';
