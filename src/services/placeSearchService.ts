@@ -38,6 +38,13 @@ const OVERPASS_ENDPOINTS = [
 
 const CATEGORY_DEFINITIONS: CategoryDefinition[] = [
   {
+    id: 'bakery',
+    labelAr: '\u0645\u062e\u0628\u0632',
+    labelEn: 'Bakery',
+    aliases: ['bakery', 'bakeries', 'bread', 'khubz', '\u0645\u062e\u0628\u0632', '\u0645\u062e\u0627\u0628\u0632', '\u062e\u0628\u0632', '\u0641\u0631\u0646'],
+    tags: [{ key: 'shop', value: 'bakery' }],
+  },
+  {
     id: 'restaurant',
     labelAr: 'مطعم',
     labelEn: 'Restaurant',

@@ -40,7 +40,7 @@ import { useCheckpoints, useRoute } from '@/hooks/useCommunity';
 import { useUnreadNotificationCount } from '@/hooks/useNotifications';
 import { useUserLocation } from '@/hooks/useUserLocation';
 import { useCreateRoadReport, useRoadReports } from '@/hooks/useRoadReports';
-import { DEFAULT_REGION } from '@/services';
+import { DEFAULT_REGION, services } from '@/services';
 import type { CreateRoadReportInput, GeoPoint, GeoRegion, ParkingZone, RamallahParkingLocation, RoadReport, RoadReportType, RouteResult } from '@/types';
 import { distanceMeters } from '@/utils/geo';
 import { assessRouteAlternatives } from '@/utils/routeImpact';
@@ -48,6 +48,7 @@ import { haptics } from '@/utils/haptics';
 import { isValidGeoPoint, normalizeGeoPoint, normalizeGeoPoints } from '@/utils/coordinates';
 import { searchPlaces, type PlaceSuggestion } from '@/services/placeSearchService';
 import { rankParkingForDestination } from '@/utils/parkingRecommendation';
+import { parseTripNeeds, type TripNeedCategory, type TripNeedPlace } from '@/utils/tripNeeds';
 import { useMapLayersStore } from '@/store/mapLayersStore';
 import { useReservationRouteStore } from '@/store/reservationRouteStore';
 import {
@@ -111,6 +112,12 @@ export default function MapScreen() {
   const [placeSearchError, setPlaceSearchError] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [selectedDestination, setSelectedDestination] = useState<PlaceSuggestion>();
+  const [tripNeedsExpanded, setTripNeedsExpanded] = useState(false);
+  const [tripNeedsAppliedText, setTripNeedsAppliedText] = useState('');
+  const [tripNeedCategories, setTripNeedCategories] = useState<TripNeedCategory[]>([]);
+  const [tripNeedPlaces, setTripNeedPlaces] = useState<TripNeedPlace[]>([]);
+  const [tripNeedsLoading, setTripNeedsLoading] = useState(false);
+  const [tripNeedsError, setTripNeedsError] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -189,10 +196,89 @@ export default function MapScreen() {
   );
   const destinationRecommendations = useMemo(
     () => selectedDestination
-      ? rankParkingForDestination(selectedDestination.location, [...zones, ...ramallahParkingZones])
+      ? rankParkingForDestination(
+        selectedDestination.location,
+        [...zones, ...ramallahParkingZones],
+        new Date(),
+        { needCategories: tripNeedCategories, needPlaces: tripNeedPlaces },
+      )
       : [],
-    [selectedDestination, zones],
+    [selectedDestination, tripNeedCategories, tripNeedPlaces, zones],
   );
+
+  useEffect(() => {
+    if (!selectedDestination || tripNeedCategories.length === 0) {
+      setTripNeedPlaces([]);
+      setTripNeedsLoading(false);
+      setTripNeedsError(false);
+      return;
+    }
+    let cancelled = false;
+    const center = selectedDestination.location;
+    const radiusMeters = 2_800;
+    const latDelta = radiusMeters / 111_320;
+    const lonDelta = radiusMeters / (111_320 * Math.max(0.25, Math.cos(center.latitude * Math.PI / 180)));
+    const bounds = {
+      north: Math.min(90, center.latitude + latDelta),
+      south: Math.max(-90, center.latitude - latDelta),
+      east: Math.min(180, center.longitude + lonDelta),
+      west: Math.max(-180, center.longitude - lonDelta),
+    };
+    setTripNeedsLoading(true);
+    setTripNeedsError(false);
+    Promise.all(tripNeedCategories.flatMap((category) => {
+      const placeSearches = category.searchQueries.map((query) =>
+        searchPlaces(query, { center, radiusMeters, limit: 5 })
+          .then((places): TripNeedPlace[] => places.map((place) => ({
+            id: `${category.id}:${place.id}`,
+            categoryId: category.id,
+            labelAr: category.labelAr,
+            labelEn: category.labelEn,
+            name: place.name,
+            nameAr: place.nameAr,
+            nameEn: place.nameEn,
+            location: place.location,
+            source: 'place',
+          }))),
+      );
+      const serviceSearch = category.carServiceCategory
+        ? services.carServices.list(bounds, { category: category.carServiceCategory })
+          .then((result): TripNeedPlace[] => result.services
+            .filter((service) => isValidGeoPoint({ latitude: service.latitude, longitude: service.longitude }))
+            .map((service) => ({
+              id: `${category.id}:car-service:${service.id}`,
+              categoryId: category.id,
+              labelAr: category.labelAr,
+              labelEn: category.labelEn,
+              name: locale === 'ar' ? service.nameAr : service.nameEn,
+              nameAr: service.nameAr,
+              nameEn: service.nameEn,
+              location: { latitude: service.latitude, longitude: service.longitude },
+              source: 'car_service',
+            })))
+        : Promise.resolve<TripNeedPlace[]>([]);
+      return [...placeSearches, serviceSearch];
+    }))
+      .then((groups) => {
+        if (cancelled) return;
+        const unique = new Map<string, TripNeedPlace>();
+        for (const place of groups.flat()) {
+          const key = `${place.categoryId}:${place.location.latitude.toFixed(5)},${place.location.longitude.toFixed(5)}`;
+          if (!unique.has(key)) unique.set(key, place);
+        }
+        setTripNeedPlaces([...unique.values()]);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTripNeedPlaces([]);
+          setTripNeedsError(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTripNeedsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [locale, selectedDestination, tripNeedCategories]);
 
   useEffect(() => {
     const query = destinationQuery.trim();
@@ -491,6 +577,10 @@ export default function MapScreen() {
       setSelectedDestination(undefined);
       setPlaceSuggestions([]);
       setPlaceSearchError(false);
+      setTripNeedsExpanded(false);
+      setTripNeedsAppliedText('');
+      setTripNeedCategories([]);
+      setTripNeedPlaces([]);
     }
   }, []);
 
@@ -505,6 +595,11 @@ export default function MapScreen() {
     setRouteTarget(undefined);
     setRouteDetailsExpanded(false);
     setNearbyExpanded(false);
+    setTripNeedsExpanded(false);
+    setTripNeedsAppliedText('');
+    setTripNeedCategories([]);
+    setTripNeedPlaces([]);
+    setTripNeedsError(false);
     const next: GeoRegion = {
       ...suggestion.location,
       latitudeDelta: 0.012,
@@ -513,6 +608,21 @@ export default function MapScreen() {
     setRegion(next);
     mapRef.current?.animateToRegion(next, 450);
   }, [locale]);
+
+  const applyTripNeeds = useCallback((value: string) => {
+    const categories = parseTripNeeds(value);
+    setTripNeedsAppliedText(value.trim());
+    setTripNeedCategories(categories);
+    setTripNeedPlaces([]);
+    setTripNeedsError(false);
+  }, []);
+
+  const clearTripNeeds = useCallback(() => {
+    setTripNeedsAppliedText('');
+    setTripNeedCategories([]);
+    setTripNeedPlaces([]);
+    setTripNeedsError(false);
+  }, []);
 
   useEffect(() => {
     if (!mapFocused || !pendingReservationRouteZoneId) return;
@@ -866,6 +976,14 @@ export default function MapScreen() {
           <DestinationParkingPanel
             destinationName={selectedDestination.name}
             recommendations={destinationRecommendations}
+            tripNeedsExpanded={tripNeedsExpanded}
+            tripNeedsAppliedText={tripNeedsAppliedText}
+            tripNeedCategories={tripNeedCategories}
+            tripNeedsLoading={tripNeedsLoading}
+            tripNeedsError={tripNeedsError}
+            onTripNeedsExpandedChange={setTripNeedsExpanded}
+            onApplyTripNeeds={applyTripNeeds}
+            onClearTripNeeds={clearTripNeeds}
             onSelect={(item) => void startRoute(parkingDestination(item.zone))}
           />
         ) : !reportStep && !selectedReport && primaryMapCategory === 'parking' ? (
