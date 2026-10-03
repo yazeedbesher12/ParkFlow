@@ -1,5 +1,5 @@
-import { CircleParking, Footprints } from 'lucide-react-native';
-import { View } from 'react-native';
+import { CircleParking } from 'lucide-react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { AppText, PressableScale } from '@/components/ui';
 import { availabilityTone } from './ZoneMarker';
@@ -29,65 +29,74 @@ export function CompactZoneCard({ item, onPress }: { item: NearbyZone; onPress: 
     neutral: colors.textTertiary,
     info: colors.info,
   }[tone];
+  const availabilityLabel = t(`zone.${zone.availability}` as const);
 
   return (
     <PressableScale
       onPress={onPress}
       haptic="select"
+      dimTo={0.9}
       accessibilityRole="button"
-      accessibilityLabel={`${name}, ${t(`zone.${zone.availability}` as const)}, ${formatRate(zone.tariff.hourlyRate)}`}
+      accessibilityLabel={`${name}, ${availabilityLabel}, ${formatRate(zone.tariff.hourlyRate)}`}
       style={{
-        minHeight: 58,
         flexDirection: row,
         alignItems: 'center',
         gap: spacing.md,
-        paddingVertical: spacing.sm,
+        paddingVertical: spacing.md,
         paddingHorizontal: spacing.md,
         borderRadius: radius.lg,
-        backgroundColor: colors.surfaceAlt,
+        backgroundColor: colors.surface,
+        borderWidth: StyleSheet.hairlineWidth * 2,
+        borderColor: colors.border,
       }}
     >
       <View
         style={{
-          width: 34,
-          height: 34,
+          width: 36,
+          height: 36,
           borderRadius: radius.md,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: colors.brandSoft,
+          backgroundColor: colors.brandSofter,
         }}
       >
-        <CircleParking size={18} color={colors.brand} strokeWidth={2.2} />
+        <CircleParking size={18} color={colors.brand} strokeWidth={2} />
       </View>
 
-      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-        <AppText variant="title" numberOfLines={1}>
+      <View style={{ flex: 1, minWidth: 0, gap: spacing.xs }}>
+        <AppText variant="titleLg" numberOfLines={1}>
           {name}
         </AppText>
-        <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
-          <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: availabilityColor }} />
+        <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
+          <AppText variant="caption" color="textSecondary" numeric numberOfLines={1}>
+            {t('map.walkMinutes', { minutes: walkingMinutes(distanceMeters) })}
+          </AppText>
+          <AppText variant="caption" color="textTertiary">
+            ·
+          </AppText>
+          <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs, flexShrink: 1 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: availabilityColor }} />
             <AppText variant="caption" color="textSecondary" numberOfLines={1}>
-              {t(`zone.${zone.availability}` as const)}
-            </AppText>
-          </View>
-          <View style={{ flexDirection: row, alignItems: 'center', gap: 3 }}>
-            <Footprints size={11} color={colors.textTertiary} strokeWidth={2.2} />
-            <AppText variant="caption" color="textTertiary" numeric numberOfLines={1}>
-              {t('map.walkMinutes', { minutes: walkingMinutes(distanceMeters) })}
+              {availabilityLabel}
             </AppText>
           </View>
         </View>
       </View>
 
-      <View style={{ alignItems: row === 'row-reverse' ? 'flex-start' : 'flex-end', gap: 2 }}>
-        <AppText variant="title" color="brand" numeric numberOfLines={1}>
-          {formatRate(zone.tariff.hourlyRate)}
-        </AppText>
-        <AppText variant="caption" color="textTertiary">
-          {t('common.perHour')}
+      <View
+        style={{
+          alignSelf: 'center',
+          paddingVertical: spacing.xs,
+          paddingHorizontal: spacing.sm,
+          borderRadius: radius.pill,
+          backgroundColor: colors.brandSofter,
+        }}
+      >
+        <AppText variant="label" color="brand" numeric numberOfLines={1}>
+          {`${formatRate(zone.tariff.hourlyRate)} ${t('common.perHour')}`}
         </AppText>
       </View>
     </PressableScale>
   );
 }
+

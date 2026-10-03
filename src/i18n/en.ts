@@ -124,7 +124,7 @@ export const en = {
   'map.locationDenied': 'Location is off',
   'map.locationDeniedBody':
     'Turn on location to see parking around you, or pick a zone on the map.',
-  'map.zonesFound': '{count} zones nearby',
+  'map.zonesFound': '{count} spots nearby',
   'map.walkMinutes': '{minutes} min walk',
 
   'ramallahParking.freeShort': 'Free',

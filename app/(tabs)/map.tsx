@@ -783,7 +783,7 @@ export default function MapScreen() {
           />
         ) : null}
 
-        {!reportLocationPicking && !reportStep && !selectedReport && __DEV__ ? (
+        {!reportLocationPicking && !reportStep && !selectedReport && __DEV__ && process.env.EXPO_PUBLIC_SHOW_TEST_LOCATION === 'true' ? (
           <View style={{ alignItems: 'flex-end' }}>
             <TestLocationControl
               enabled={testLocationMode}
