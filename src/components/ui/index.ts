@@ -24,3 +24,4 @@ export * from './SuccessCheck';
 export * from './InlineNotice';
 export * from './OtpInput';
 export * from './Reveal';
+export * from './OnboardingStepper';

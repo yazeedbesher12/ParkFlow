@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { AppButton, AppText, InlineNotice, Reveal, Screen } from '@/components/ui';
+import { AppButton, AppText, InlineNotice, OnboardingStepper, Reveal, Screen } from '@/components/ui';
 import { VehicleForm } from '@/components/domain/VehicleForm';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
@@ -27,6 +27,7 @@ export default function AddFirstVehicleScreen() {
   return (
     <Screen keyboardAvoiding>
       <View style={{ height: spacing.giant }} />
+      <OnboardingStepper current={3} />
 
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t('onboarding.vehicleTitle')}</AppText>

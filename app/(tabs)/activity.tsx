@@ -18,6 +18,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 import { useTransactions } from '@/hooks/useWallet';
+import type { TranslationKey } from '@/i18n';
 import type { Transaction, TransactionType } from '@/types';
 import { formatDayHeading } from '@/utils/time';
 
@@ -64,6 +65,13 @@ export default function ActivityScreen() {
         data,
       }));
   }, [transactions, t, dateLocale]);
+
+  const emptyBodyKeys: Record<Filter, TranslationKey> = {
+    all: 'activity.emptyBody',
+    parking: 'activity.emptyBodyParking',
+    payments: 'activity.emptyBodyPayments',
+    violations: 'activity.emptyBodyViolations',
+  };
 
   const options = [
     { value: 'all' as const, label: t('activity.all') },
@@ -122,7 +130,7 @@ export default function ActivityScreen() {
             <EmptyState
               icon={<Receipt size={28} color={colors.brand} strokeWidth={2} />}
               title={t('activity.empty')}
-              body={t('activity.emptyBody')}
+              body={t(emptyBodyKeys[filter])}
             />
           }
         />

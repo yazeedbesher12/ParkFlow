@@ -5,7 +5,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
 import { z } from 'zod';
 
-import { AppButton, AppText, InlineNotice, Reveal, Screen, TextField } from '@/components/ui';
+import {
+  AppButton,
+  AppText,
+  InlineNotice,
+  OnboardingStepper,
+  Reveal,
+  Screen,
+  TextField,
+} from '@/components/ui';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 import { useBlockHardwareBack } from '@/hooks/useBlockHardwareBack';
@@ -49,6 +57,7 @@ export default function NameScreen() {
   return (
     <Screen keyboardAvoiding>
       <View style={{ height: spacing.giant }} />
+      <OnboardingStepper current={2} />
 
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t('onboarding.nameTitle')}</AppText>

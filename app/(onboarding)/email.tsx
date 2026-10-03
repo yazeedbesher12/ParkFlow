@@ -8,6 +8,7 @@ import {
   AppHeader,
   AppText,
   InlineNotice,
+  OnboardingStepper,
   Reveal,
   Screen,
   TextField,
@@ -63,6 +64,7 @@ export default function EmailScreen() {
   return (
     <Screen keyboardAvoiding safeBottom>
       <AppHeader />
+      <OnboardingStepper current={0} />
 
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t('onboarding.emailTitle')}</AppText>

@@ -11,6 +11,7 @@ import {
   OtpInput,
   PressableScale,
   Reveal,
+  OnboardingStepper,
   Screen,
 } from '@/components/ui';
 import { spacing } from '@/theme/spacing';
@@ -95,6 +96,7 @@ export default function OtpScreen() {
   return (
     <Screen keyboardAvoiding>
       <AppHeader />
+      <OnboardingStepper current={1} />
 
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t('onboarding.otpTitle')}</AppText>

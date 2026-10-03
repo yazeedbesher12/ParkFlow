@@ -1,4 +1,4 @@
-import { View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { LogoMark } from '@/components/brand/Logo';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
+import { shadow } from '@/theme/shadows';
 import { useLocale } from '@/hooks/useLocale';
 
 export default function WelcomeScreen() {
@@ -41,21 +42,21 @@ export default function WelcomeScreen() {
           pointerEvents="none"
           style={{
             position: 'absolute',
-            top: height * 0.06,
+            top: height * 0.08,
             alignSelf: 'center',
-            width: 380,
-            height: 380,
-            borderRadius: 190,
+            width: 300,
+            height: 300,
+            borderRadius: 150,
             backgroundColor: colors.brand,
-            opacity: 0.04,
+            opacity: 0.025,
           }}
         />
 
         <View
           style={{
             flex: 1,
-            paddingTop: insets.top + spacing.giant,
-            paddingBottom: insets.bottom + spacing.xxl,
+            paddingTop: insets.top + spacing.xxxl,
+            paddingBottom: insets.bottom + spacing.xl,
             paddingHorizontal: screenPadding,
           }}
         >
@@ -86,7 +87,7 @@ export default function WelcomeScreen() {
 
           <View style={{ flex: 1 }} />
 
-          <Reveal delay={300} style={{ gap: spacing.md, marginBottom: spacing.xxxl }}>
+          <Reveal delay={300} style={{ gap: spacing.sm, marginBottom: spacing.xxl }}>
             {features.map(({ Icon, label }, index) => (
               <View
                 key={label}
@@ -94,35 +95,38 @@ export default function WelcomeScreen() {
                   flexDirection: row,
                   alignItems: 'center',
                   gap: spacing.md,
-                  paddingVertical: spacing.md,
-                  paddingHorizontal: spacing.lg,
+                  paddingVertical: spacing.sm,
+                  paddingHorizontal: spacing.md,
                   borderRadius: radius.lg,
                   backgroundColor: colors.surface,
+                  borderWidth: StyleSheet.hairlineWidth * 2,
+                  borderColor: colors.border,
+                  ...shadow.xs,
                 }}
               >
                 <View
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: radius.md,
+                    width: 32,
+                    height: 32,
+                    borderRadius: radius.sm,
                     alignItems: 'center',
                     justifyContent: 'center',
                     backgroundColor: colors.brandSoft,
                   }}
                 >
-                  <Icon size={18} color={colors.brand} strokeWidth={2.2} />
+                  <Icon size={16} color={colors.brand} strokeWidth={2.2} />
                 </View>
                 <AppText variant="title" color="text" style={{ flex: 1 }}>
                   {label}
                 </AppText>
-                <AppText variant="caption" color="textSecondary" numeric>
+                <AppText variant="caption" color="textTertiary" numeric>
                   {String(index + 1).padStart(2, '0')}
                 </AppText>
               </View>
             ))}
           </Reveal>
 
-          <Reveal delay={420} style={{ gap: spacing.md }}>
+          <Reveal delay={420} style={{ gap: spacing.sm }}>
             <AppButton
               label={t('onboarding.getStarted')}
               onPress={goToEmail}
@@ -133,7 +137,7 @@ export default function WelcomeScreen() {
               label={t('onboarding.login')}
               onPress={goToEmail}
               variant="ghost"
-              style={{ height: 48 }}
+              style={{ height: 44 }}
             />
 
           </Reveal>
