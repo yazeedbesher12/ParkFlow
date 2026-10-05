@@ -6,7 +6,8 @@ import type { CarServiceBusiness } from './carService';
 export type RouteDestination =
   | { type: 'parking'; id: string; name: string; nameAr: string; location: GeoPoint; zone: ParkingZone }
   | { type: 'ev_station'; id: string; name: string; location: GeoPoint; station: EvChargingStation }
-  | { type: 'car_service'; id: string; name: string; nameAr: string; location: GeoPoint; service: CarServiceBusiness };
+  | { type: 'car_service'; id: string; name: string; nameAr: string; location: GeoPoint; service: CarServiceBusiness }
+  | { type: 'place'; id: string; name: string; nameAr?: string; location: GeoPoint };
 export const parkingDestination = (zone: ParkingZone): RouteDestination => ({
   type: 'parking', id: zone.id, name: zone.name, nameAr: zone.nameAr, location: zone.location, zone,
 });
@@ -21,4 +22,7 @@ export const carServiceDestination = (service: CarServiceBusiness): RouteDestina
   nameAr: service.nameAr,
   location: { latitude: service.latitude, longitude: service.longitude },
   service,
+});
+export const placeDestination = (place: { id: string; name: string; nameAr?: string; location: GeoPoint }): RouteDestination => ({
+  type: 'place', id: place.id, name: place.name, nameAr: place.nameAr, location: place.location,
 });

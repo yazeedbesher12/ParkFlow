@@ -24,12 +24,23 @@ export interface MapRoute {
   coordinates: GeoPoint[];
   trafficState?: RouteTrafficSegment['state'];
   trafficSegments?: RouteTrafficSegment[];
+  /** Need-aware route portions that diverge from the shortest route. */
+  detourSegments?: GeoPoint[][];
+  detourMode?: 'primary' | 'comparison';
+  showRouteLegend?: boolean;
   /** Alternatives that were not taken — drawn dashed. */
   alternatives: GeoPoint[][];
 }
 
 export interface MapLandmark {
   name: string;
+  location: GeoPoint;
+}
+
+export interface MapNeedStop {
+  id: string;
+  name: string;
+  category: string;
   location: GeoPoint;
 }
 
@@ -69,6 +80,7 @@ export interface MapSurfaceProps {
   route?: MapRoute;
   /** The place a landmark search resolved to. */
   landmark?: MapLandmark;
+  needStops?: MapNeedStop[];
   style?: StyleProp<ViewStyle>;
 }
 

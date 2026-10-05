@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, TextInput, View } from 'react-native';
-import { CircleParking, Footprints, NotebookPen, Search, X } from 'lucide-react-native';
+import { CircleParking, Footprints, Navigation, NotebookPen, Route, Search, X } from 'lucide-react-native';
 import { AppText, PressableScale } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -11,18 +11,26 @@ import { formatRate } from '@/utils/money';
 import { formatDistance, walkingMinutes } from '@/utils/geo';
 import type { ParkingRecommendation } from '@/utils/parkingRecommendation';
 import type { TripNeedCategory } from '@/utils/tripNeeds';
+import type { TripNeedsRoutePlan } from '@/utils/tripNeedsRouting';
 
 interface Props {
   recommendations: ParkingRecommendation[];
   destinationName: string;
   tripNeedsExpanded: boolean;
   tripNeedsAppliedText: string;
+  tripNeedsMode: 'idle' | 'choosing' | 'parking' | 'route';
   tripNeedCategories: TripNeedCategory[];
+  tripNeedsNoMatches?: boolean;
   tripNeedsLoading: boolean;
   tripNeedsError: boolean;
+  routeNeedsPlan?: TripNeedsRoutePlan;
+  routeNeedsLoading?: boolean;
+  routeNeedsError?: boolean;
   onTripNeedsExpandedChange: (expanded: boolean) => void;
   onApplyTripNeeds: (value: string) => void;
   onClearTripNeeds: () => void;
+  onRouteWithNeeds: () => void;
+  onBestParkingForNeeds: () => void;
   onSelect: (item: ParkingRecommendation) => void;
 }
 
@@ -33,12 +41,19 @@ export function DestinationParkingPanel({
   destinationName,
   tripNeedsExpanded,
   tripNeedsAppliedText,
+  tripNeedsMode,
   tripNeedCategories,
+  tripNeedsNoMatches = false,
   tripNeedsLoading,
   tripNeedsError,
+  routeNeedsPlan,
+  routeNeedsLoading = false,
+  routeNeedsError = false,
   onTripNeedsExpandedChange,
   onApplyTripNeeds,
   onClearTripNeeds,
+  onRouteWithNeeds,
+  onBestParkingForNeeds,
   onSelect,
 }: Props) {
   const { colors } = useTheme();
@@ -62,6 +77,10 @@ export function DestinationParkingPanel({
     locale === 'ar'
       ? match.place?.nameAr ?? match.place?.name ?? match.place?.nameEn
       : match.place?.nameEn ?? match.place?.name ?? match.place?.nameAr;
+  const needLabel = (category: TripNeedCategory) =>
+    locale === 'ar'
+      ? category.needLabelAr ?? category.labelAr
+      : category.needLabelEn ?? category.labelEn;
 
   const resolvedMatches = (item: ParkingRecommendation) =>
     item.needMatches
@@ -86,6 +105,11 @@ export function DestinationParkingPanel({
       places: reasonPlaces,
     })
     : undefined;
+  const normalizedDraft = draft.trim();
+  const draftEdited = normalizedDraft.length > 0 && normalizedDraft !== tripNeedsAppliedText.trim();
+  const hideRecommendations = (tripNeedsExpanded && draftEdited) || tripNeedsMode === 'choosing' || tripNeedsMode === 'route';
+  const showNeedModeChoices = tripNeedsAppliedText && tripNeedCategories.length > 0 && tripNeedsMode !== 'parking';
+  const routeModeAvailable = tripNeedCategories.length > 0;
 
   return (
     <View
@@ -107,7 +131,7 @@ export function DestinationParkingPanel({
         <PressableScale
           onPress={() => onTripNeedsExpandedChange(!tripNeedsExpanded)}
           accessibilityRole="button"
-          accessibilityLabel={t('tripNeeds.add')}
+          accessibilityLabel={t('tripNeeds.shoppingList')}
           style={{
             alignSelf: row === 'row-reverse' ? 'flex-end' : 'flex-start',
             flexDirection: row,
@@ -120,7 +144,7 @@ export function DestinationParkingPanel({
           }}
         >
           <NotebookPen size={15} color={colors.brand} strokeWidth={2.2} />
-          <AppText variant="caption" color="brand" weight="bold">{t('tripNeeds.add')}</AppText>
+          <AppText variant="caption" color="brand" weight="bold">{t('tripNeeds.shoppingList')}</AppText>
         </PressableScale>
         {tripNeedsExpanded ? (
           <View
@@ -184,20 +208,119 @@ export function DestinationParkingPanel({
             </PressableScale>
           </View>
         ) : null}
-        {tripNeedsLoading ? (
+        {tripNeedsLoading || routeNeedsLoading ? (
           <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
             <ActivityIndicator size="small" color={colors.brand} />
             <AppText variant="caption" color="textSecondary">{t('tripNeeds.searching')}</AppText>
           </View>
-        ) : tripNeedsError ? (
+        ) : tripNeedsError || routeNeedsError ? (
           <AppText variant="caption" color="danger">{t('tripNeeds.failed')}</AppText>
-        ) : tripNeedsAppliedText && tripNeedCategories.length === 0 ? (
+        ) : tripNeedsNoMatches ? (
           <AppText variant="caption" color="warningText">{t('tripNeeds.noMatches')}</AppText>
-        ) : reason ? (
+        ) : !hideRecommendations && reason ? (
           <AppText variant="caption" color="textSecondary">{reason}</AppText>
         ) : null}
       </View>
-      {recommendations.length === 0 ? (
+      {showNeedModeChoices ? (
+        <View style={{ gap: spacing.sm }}>
+          <View style={{ flexDirection: row, gap: spacing.sm }}>
+            <PressableScale
+              onPress={onRouteWithNeeds}
+              disabled={!routeModeAvailable}
+              accessibilityRole="button"
+              accessibilityLabel={t('tripNeeds.routeWithNeeds')}
+              style={{
+                flex: 1,
+                minHeight: 58,
+                gap: 4,
+                padding: spacing.sm,
+                borderRadius: radius.lg,
+                backgroundColor: routeModeAvailable ? colors.brand : colors.surfaceAlt,
+                opacity: routeModeAvailable ? 1 : 0.62,
+              }}
+            >
+              <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
+                <Route size={16} color={routeModeAvailable ? colors.onBrand : colors.textSecondary} strokeWidth={2.3} />
+                <AppText variant="label" color={routeModeAvailable ? 'textOnColor' : 'textSecondary'} numberOfLines={1}>
+                  {t('tripNeeds.routeWithNeeds')}
+                </AppText>
+              </View>
+              {routeNeedsPlan ? (
+                <AppText variant="caption" color={routeNeedsPlan ? 'textOnColor' : 'textSecondary'} numeric numberOfLines={1}>
+                  {t('tripNeeds.routeAdds', {
+                    minutes: Math.max(0, Math.round(routeNeedsPlan.addedDurationSeconds / 60)),
+                    distance: formatDistance(routeNeedsPlan.addedDistanceMeters),
+                  })}
+                </AppText>
+              ) : null}
+            </PressableScale>
+            <PressableScale
+              onPress={onBestParkingForNeeds}
+              accessibilityRole="button"
+              accessibilityLabel={t('tripNeeds.bestParking')}
+              style={{
+                flex: 1,
+                minHeight: 58,
+                gap: 4,
+                padding: spacing.sm,
+                borderRadius: radius.lg,
+                backgroundColor: colors.brandSoft,
+              }}
+            >
+              <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
+                <Navigation size={16} color={colors.brand} strokeWidth={2.3} />
+                <AppText variant="label" color="brand" numberOfLines={1}>{t('tripNeeds.bestParking')}</AppText>
+              </View>
+              <AppText variant="caption" color="textSecondary" numberOfLines={1}>
+                {t('tripNeeds.bestParkingHint')}
+              </AppText>
+            </PressableScale>
+          </View>
+          {routeNeedsPlan ? (
+            <View style={{ gap: 3 }}>
+              <AppText variant="caption" color="textSecondary" numberOfLines={1}>
+                {t('tripNeeds.partialSummary', {
+                  matched: routeNeedsPlan.matchedCategories.length,
+                  total: tripNeedCategories.length,
+                })}
+              </AppText>
+              {routeNeedsPlan.matchedCategories.length ? (
+                <AppText variant="caption" color="successText" numberOfLines={1}>
+                  {t('tripNeeds.matchedNeeds', {
+                    needs: joinParts(routeNeedsPlan.matchedCategories.map(needLabel)),
+                  })}
+                </AppText>
+              ) : null}
+              {routeNeedsPlan.missingCategories.length ? (
+                <AppText variant="caption" color="warningText" numberOfLines={1}>
+                  {t('tripNeeds.unmatchedNeeds', {
+                    needs: joinParts(routeNeedsPlan.missingCategories.map(needLabel)),
+                  })}
+                </AppText>
+              ) : null}
+            </View>
+          ) : null}
+          {routeNeedsPlan?.stops.length ? (
+            <View style={{ gap: 3 }}>
+              {routeNeedsPlan.stops.map((stop) => (
+                <View key={stop.place.id} style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
+                  <AppText variant="caption" color="brand" numberOfLines={1}>
+                    {joinParts(stop.satisfiedCategories.map(needLabel))}
+                  </AppText>
+                  <AppText variant="caption" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
+                    {t('tripNeeds.stopAdds', {
+                      name: locale === 'ar' ? stop.place.nameAr ?? stop.place.name : stop.place.nameEn ?? stop.place.name,
+                      distance: formatDistance(stop.addedDistanceMeters),
+                      minutes: Math.max(0, Math.round(stop.addedDurationSeconds / 60)),
+                    })}
+                  </AppText>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {hideRecommendations ? null : recommendations.length === 0 ? (
         <AppText variant="caption" color="textSecondary">{t('map.noRecommendedParking')}</AppText>
       ) : (
         <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ gap: spacing.sm }} nestedScrollEnabled>
