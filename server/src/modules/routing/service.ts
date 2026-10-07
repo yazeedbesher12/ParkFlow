@@ -176,3 +176,26 @@ export const routingService = {
     };
   },
 };
+
+export interface ParkingScoreInput {
+  driveSeconds?: number | null; walkMeters?: number | null; price?: number | null;
+  provenance?: { confidence?: number | null; freshness?: string | null } | null;
+  accessibility?: boolean | null; evCompatible?: boolean | null;
+}
+export interface ParkingScoreBreakdown { time: number; walking: number; price: number; confidence: number; accessibility: number; ev: number; total: number; reasons: string[] }
+/** Deterministic, bounded ranking score. Missing metadata contributes zero and never throws. */
+export function scoreParkingOption(input: ParkingScoreInput): ParkingScoreBreakdown {
+  const n = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? Math.max(0, v) : undefined;
+  const drive = n(input.driveSeconds), walk = n(input.walkMeters), price = n(input.price);
+  const time = drive == null ? 0 : Math.max(0, 30 - drive / 120);
+  const walking = walk == null ? 0 : Math.max(0, 20 - walk / 50);
+  const priceScore = price == null ? 0 : Math.max(0, 20 - price / 25);
+  const confidence = input.provenance?.confidence == null ? 0 : Math.round(Math.min(1, Math.max(0, input.provenance.confidence)) * 20);
+  const accessibility = input.accessibility === true ? 5 : 0;
+  const ev = input.evCompatible === true ? 5 : 0;
+  const total = Math.round((time + walking + priceScore + confidence + accessibility + ev) * 100) / 100;
+  const reasons: string[] = [];
+  if (drive != null) reasons.push('drive-time'); if (walk != null) reasons.push('walking-distance'); if (price != null) reasons.push('price');
+  if (input.provenance?.confidence != null) reasons.push('availability-confidence'); if (input.accessibility === true) reasons.push('accessible'); if (input.evCompatible === true) reasons.push('ev-compatible');
+  return { time, walking, price: priceScore, confidence, accessibility, ev, total, reasons };
+}

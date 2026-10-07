@@ -57,7 +57,7 @@ export default function VehicleDetailScreen() {
   const { data: sessions = [] } = useSessionHistory(id);
   const { data: violations = [] } = useViolations(id);
   const { data: activeSessions = [] } = useActiveSessions();
-  const { data: permits = [] } = useVehiclePermits(id);
+  const { data: permits = [] } = useVehiclePermits(vehicle?.verifiedAt ? id : undefined);
   const { data: zones = [] } = useZones();
   const setDefault = useSetDefaultVehicle();
   const unlink = useUnlinkVehicle();
@@ -145,6 +145,16 @@ export default function VehicleDetailScreen() {
           </View>
         </Card>
 
+        {!vehicle.verifiedAt ? (
+          <InlineNotice
+            tone="info"
+            title={locale === 'ar' ? 'ارتباط المركبة بانتظار التوثيق' : 'Vehicle verification pending'}
+            body={locale === 'ar'
+              ? 'يمكنك استخدام المركبة للمواقف. لعرض المخالفات والتصاريح، تواصل مع الإدارة لتوثيق ارتباطك بها.'
+              : 'You can use this vehicle for parking. Contact support to verify your association before viewing violations and permits.'}
+          />
+        ) : null}
+
         {activeSession ? (
           <InlineNotice
             tone="success"
@@ -222,6 +232,7 @@ export default function VehicleDetailScreen() {
           </Card>
         </View>
 
+        {vehicle.verifiedAt ? <>
         {/* ---- Violations ---------------------------------------------- */}
         <View>
           <SectionHeader
@@ -324,6 +335,7 @@ export default function VehicleDetailScreen() {
           </Card>
         </View>
 
+        </> : null}
         {/* ---- Danger zone ---------------------------------------------- */}
         <AppButton
           label={t('vehicle.remove')}

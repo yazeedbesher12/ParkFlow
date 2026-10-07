@@ -1,99 +1,80 @@
-# Email OTP setup
+# SMTP email verification setup
 
-Authentication now uses email -> request OTP -> verify OTP -> login/register. Access tokens, refresh rotation, token families, and logout retain their existing implementation. No demo login, fixed code, code display, or development email provider exists in the app/server. Automated tests intercept delivery only inside the test process.
+Phone verification is the primary normal onboarding flow. SMTP email verification
+remains available in the backend. During temporary development email sign-in,
+code request and verification endpoints are paused. See [PHONE_AUTH.md](PHONE_AUTH.md)
+for the active development flow and how to restore verification.
 
-## Gmail setup
+## Configure delivery
 
-1. Enable 2-Step Verification for `awwadh311@gmail.com` and create an App Password: https://support.google.com/accounts/answer/185833
-2. Put the App Password only in `server/.env`, as `SMTP_PASSWORD`. Never use an `EXPO_PUBLIC_` variable for credentials. The local file is ignored by Git; the example file contains no password.
-3. These non-secret settings are already in `server/.env.example` and the local `server/.env`:
+1. For Gmail, enable two-step verification on the sending account and create an
+   [App Password](https://support.google.com/accounts/answer/185833).
+2. Put the password only in the private `server/.env`, as `SMTP_PASSWORD`.
+   Never place credentials in `EXPO_PUBLIC_*` variables or commit the populated file.
+3. Configure the sender in `server/.env`:
 
-```dotenv
-EMAIL_PROVIDER=smtp
-EMAIL_FROM=awwadh311@gmail.com
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=awwadh311@gmail.com
-SMTP_PASSWORD=
-```
+   ```dotenv
+   EMAIL_PROVIDER=smtp
+   EMAIL_FROM=your-email@example.com
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=465
+   SMTP_SECURE=true
+   SMTP_USER=your-email@example.com
+   SMTP_PASSWORD=
+   DEV_SKIP_EMAIL_OTP=false
+   DEV_SKIP_PHONE_OTP=false
+   ```
 
-Paste the App Password after `SMTP_PASSWORD=` without its display spaces. Never commit the populated file. For another SMTP service, change these settings. `EmailProvider` in `server/src/providers/email.ts` is the interface for future providers. SMTP uses TLS, bounded timeouts, and does not log message content. Transport reference: https://nodemailer.com/smtp
+Replace the example address and supply the App Password without its display
+spaces. For another SMTP provider, change the host, port and TLS settings.
+The adapter is `server/src/providers/email.ts`; transport options follow
+[Nodemailer SMTP configuration](https://nodemailer.com/smtp).
 
-## Run locally (PowerShell)
-
-From `D:\ParkFlow\server`:
-
-```powershell
-npm install
-docker compose up -d postgres redis minio
-npm run db:generate
-npm run db:migrate
-npm run dev
-```
-
-Stop existing ParkFlow backend/worker processes before `db:generate` if Windows reports the Prisma DLL is locked, then restart them. Do not overwrite an existing `.env` with the example; retain database URLs and token secrets. On a fresh checkout, copy the example to `.env` first and configure it.
-
-From `D:\ParkFlow`, set `EXPO_PUBLIC_API_BASE_URL` in the root `.env` to `http://localhost:4000/api/v1` for web, or your computer's LAN IP for a physical phone. Then:
+After changing environment settings, run this from `server`:
 
 ```powershell
-npm install
-npm start -- --clear
+docker compose up -d --force-recreate backend worker
 ```
 
-Enter a real recipient email, request a code, check the inbox/spam folder, and enter the six digits. A new account continues to profile setup; a returning account opens the map. Codes expire after five minutes, allow five failed attempts, and are consumed once. Resend is available after 60 seconds. Only OTP hashes are stored in Redis. Failed SMTP delivery returns an error and clears the challenge/cooldown; it never silently signs in or reveals the code. Gmail acceptance does not guarantee inbox placement.
+For full project setup, ports and database configuration, see [README.md](README.md).
+Do not overwrite a configured `.env` with the example.
 
-API request: `POST /api/v1/auth/request-otp` with `{"email":"recipient@example.com"}`. Response: `challengeId`, `email`, `resendAfterSeconds`, `expiresAt`. Verify through `POST /api/v1/auth/verify-otp` with `{"challengeId":"<id>","code":"<received code>"}`. The token response has its existing shape.
+## Verification API
+
+Request: `POST /api/v1/auth/request-otp` with
+`{"email":"recipient@example.com"}`. The response contains `challengeId`,
+`email`, `resendAfterSeconds` and `expiresAt`.
+
+Verify: `POST /api/v1/auth/verify-otp` with
+`{"challengeId":"<id>","code":"<received code>"}`. Successful verification
+returns the existing access and refresh token response.
+
+Codes expire after five minutes, allow five failed attempts, and are consumed
+once. Resend is available after 60 seconds. Redis stores OTP hashes. SMTP delivery
+failures return an error and clear the challenge and cooldown; they do not sign
+in the user or reveal the code. Acceptance by SMTP does not guarantee inbox
+placement, so test with a real recipient and check the spam folder.
 
 ## Existing accounts
 
-The migration preserves users, phone numbers, balances, and sessions. Phone/country code become optional; normalized email becomes nullable and unique, with a separate verification timestamp. Duplicate normalized legacy emails intentionally prevent migration until ownership is resolved. No accounts are merged or deleted.
+Profile contact addresses from older accounts are not automatically trusted as
+login identities. An unverified legacy address requires an ownership check before
+it can be linked for real email authentication; the backend returns
+`EMAIL_MIGRATION_REQUIRED` for that situation. Do not merge accounts or grant
+roles based only on a matching email.
 
-Previously stored profile emails were editable without verification, so they cannot safely become login identities automatically. Existing users need a support-assisted ownership check to bind a unique email to their existing user ID and set `emailVerifiedAt`. A matching unverified legacy email returns `EMAIL_MIGRATION_REQUIRED`. Accounts without an email also require this explicit linking step to preserve their old account. Profile editing cannot change login email. Verified email receives the same trust points previously granted to verified phone, without double counting.
+Development-created email accounts remain unverified. Successful real email
+verification clears their internal pending state; normal legacy account
+protections remain in place. Restoring phone sign-in also requires an appropriate
+verified phone and account-linking process for accounts created without a phone.
 
-For a deliberately provisioned local admin, use `SEED_ADMIN_EMAIL` in `server/.env` before `npm run db:seed`; OTP is still delivered through SMTP.
+For a new local development administrator, configure `SEED_ADMIN_EMAIL` before
+seeding. Seeding does not promote an existing ordinary account.
 
-## Verification
+## Testing
 
-Run `npm run typecheck` in both root and `server`. In `server`, set `TEST_DATABASE_URL` to a dedicated database ending in `_test`, then run `npm test`. The suite truncates only that test database and uses Redis database 15. Delivery is intercepted with a test spy so automated tests send no emails. Actual Gmail delivery must be tested after supplying the App Password; no credential was supplied during implementation.
-
-## Changed files
-
-- `.env.example`
-- `EMAIL_OTP.md`
-- `README.md`
-- `app/(onboarding)/_layout.tsx`
-- `app/(onboarding)/email.tsx`
-- `app/(onboarding)/otp.tsx`
-- `app/(onboarding)/phone.tsx`
-- `app/(onboarding)/welcome.tsx`
-- `app/(tabs)/profile.tsx`
-- `app/profile/personal.tsx`
-- `server/.env.example`
-- `server/package-lock.json`
-- `server/package.json`
-- `server/prisma/migrations/20260924000000_email_otp/migration.sql`
-- `server/prisma/schema.prisma`
-- `server/prisma/seed.ts`
-- `server/src/apiRegistry.ts`
-- `server/src/config/env.ts`
-- `server/src/modules/auth/routes.ts`
-- `server/src/modules/auth/service.ts`
-- `server/src/modules/trust/service.ts`
-- `server/src/modules/users/service.ts`
-- `server/src/providers/email.ts`
-- `server/src/providers/sms.ts`
-- `server/tests/core.test.ts`
-- `server/vitest.config.ts`
-- `src/components/ui/OtpInput.tsx`
-- `src/i18n/ar.ts`
-- `src/i18n/en.ts`
-- `src/services/authService.ts`
-- `src/services/mock/db.ts`
-- `src/services/profileService.ts`
-- `src/services/types.ts`
-- `src/store/preferencesStore.ts`
-- `src/types/road.ts`
-- `src/types/user.ts`
-
-Local ignored `.env` and `server/.env` were updated too, without adding a password. Removed files include the phone screen, SMS provider, and mock authentication service. The `apiRegistry.ts` change adds a missing type import needed for the backend typecheck.
+Run `npm run typecheck` in the project root and `server`. Backend tests require a
+dedicated `TEST_DATABASE_URL` whose database name ends in `_test`, and use Redis
+database 15. Run `node scripts/migrate-test.cjs` and `npm test` from `server`.
+Tests intercept email delivery so no real emails are sent. Test actual SMTP
+delivery separately after configuring the private credentials.

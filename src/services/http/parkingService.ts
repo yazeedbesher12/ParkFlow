@@ -1,5 +1,5 @@
 import type { ParkingService } from '../types';
-import type { ParkingSession, ParkingZone } from '@/types';
+import type { ParkingFeedback, ParkingSession, ParkingZone } from '@/types';
 import { ramallahParkingZones } from '@/data/ramallahParking';
 import { normalizeGeoPoint } from '@/utils/coordinates';
 import { AppError } from '@/utils/errors';
@@ -32,7 +32,13 @@ const normalizeZone = (zone: ApiParkingZone): ParkingZone => {
         accessRestrictionAr: metadata.accessRestrictionAr,
         parkingAllowed: metadata.parkingAllowed,
         prototypeData: metadata.prototypeData,
-        availability: normalized.availability === 'unknown' ? metadata.availability : normalized.availability,
+        // Collected availability is prototype metadata. Keep live API
+        // `unknown` unknown unless the API explicitly marks this zone as a
+        // prototype/demo response, so provenance cannot be contradicted by a
+        // concrete client-side claim.
+        ...(normalized.availability === 'unknown' && normalized.prototypeData === true
+          ? { availability: metadata.availability }
+          : {}),
       }
     : normalized;
 };
@@ -57,6 +63,7 @@ export const httpParkingService: ParkingService = {
     return normalizeZone(await api<ApiParkingZone>(`/parking/zones/code/${segment(code)}`));
   },
   getFacility: (id) => api(`/parking/facilities/${segment(id)}`),
+  getFacilityNavigation: (id) => api(`/parking/facilities/${segment(id)}/navigation`),
   getLayout: (id) => api(`/parking/zones/${segment(id)}/layout`),
   startSession: ({ userId, idempotencyKey, ...body }) =>
     api('/parking/sessions', { method: 'POST', body, key: idempotencyKey }),
@@ -64,6 +71,8 @@ export const httpParkingService: ParkingService = {
   extendSession: (id, additionalMinutes) =>
     mutation(`/parking/sessions/${segment(id)}/extend`, { additionalMinutes }),
   settleSession: (id) => mutation(`/parking/sessions/${segment(id)}/settle`),
+  submitParkingFeedback: ({ userId: _userId, idempotencyKey, zoneId, ...body }) =>
+    api<ParkingFeedback>(`/parking/zones/${segment(zoneId)}/feedback`, { method: 'POST', body, key: idempotencyKey }),
   getSession: (id) => api(`/parking/sessions/${segment(id)}`),
   listActiveSessions: () => api('/parking/sessions/active'),
   async getActiveSessionForVehicle(vehicleId) {
@@ -72,6 +81,7 @@ export const httpParkingService: ParkingService = {
     )[0];
   },
   listSessions: ({ userId, ...options }) => api('/parking/sessions' + query(options)),
+  quoteReservation: (body) => api('/parking/reservations/quote', { method: 'POST', body }),
   createReservation: (body) => mutation('/parking/reservations', body),
   listReservations: () => api('/parking/reservations'),
   getReservation: (id) => api(`/parking/reservations/${segment(id)}`),

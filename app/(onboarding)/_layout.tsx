@@ -15,8 +15,10 @@ export default function OnboardingLayout() {
     >
       <Stack.Screen name="welcome" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="email" />
+      <Stack.Screen name="phone" />
       <Stack.Screen name="otp" />
-      <Stack.Screen name="name" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="name" />
+      <Stack.Screen name="details" options={{ gestureEnabled: false }} />
       <Stack.Screen name="vehicle" options={{ gestureEnabled: false }} />
     </Stack>
   );

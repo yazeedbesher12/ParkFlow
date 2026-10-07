@@ -1,155 +1,98 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-
-import {
-  AppButton,
-  AppHeader,
-  AppText,
-  InlineNotice,
-  OtpInput,
-  PressableScale,
-  Reveal,
-  Screen,
-} from '@/components/ui';
+import { AppButton, AppHeader, AppText, InlineNotice, OtpInput, PressableScale, Reveal, Screen } from '@/components/ui';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
+import { useDeadline } from '@/hooks/useDeadline';
 import { services } from '@/services';
+import { usePhoneAuthStore } from '@/store/phoneAuthStore';
 import { useAuthStore } from '@/store/authStore';
-import { usePreferencesStore } from '@/store/preferencesStore';
+import { authLanding, retryDelaySeconds, verificationRetryDelay } from '@/utils/authFlow';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
-
-const CODE_LENGTH = 6;
 
 export default function OtpScreen() {
   const router = useRouter();
   const { t } = useLocale();
-  const params = useLocalSearchParams<{
-    challengeId: string;
-    email: string;
-    resendAfter?: string;
-  }>();
-
-  const signIn = useAuthStore((s) => s.signIn);
-  const completeOnboarding = usePreferencesStore((s) => s.completeOnboarding);
-
-  const [challengeId, setChallengeId] = useState(params.challengeId);
+  const user = useAuthStore((state) => state.user);
+  const { challenge, purpose, fullName, setChallenge, resendAvailableAt, retryAvailableAt, verificationAvailableAt, setRetryDelay, setVerificationDelay, clearChallenge } = usePhoneAuthStore();
+  const resendSeconds = useDeadline(Math.max(resendAvailableAt, retryAvailableAt));
+  const lockSeconds = useDeadline(verificationAvailableAt);
+  const expirySeconds = useDeadline(challenge ? Date.parse(challenge.expiresAt) : 0);
   const [code, setCode] = useState('');
-  const [secondsLeft, setSecondsLeft] = useState(Number(params.resendAfter ?? 30));
   const submittedFor = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (secondsLeft <= 0) return;
-    const timer = setInterval(() => setSecondsLeft((n) => Math.max(0, n - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [secondsLeft]);
-
+  const verifying = useRef(false);
   const verify = useMutation({
-    mutationFn: (value: string) => services.auth.verifyOtp({ challengeId, code: value }),
-    onSuccess: async ({ session, user }) => {
+    mutationFn: (value: string) => services.auth.verifyPhoneOtp({ challengeId: challenge!.challengeId, code: value }),
+    onSuccess: ({ user }) => {
+      clearChallenge();
       haptics.success();
-      await signIn(session, user);
-      // A returning account is already set up; only new ones continue the flow.
-      if (user.fullName) {
-        completeOnboarding();
-        router.replace('/(tabs)/map');
-      } else {
-        router.replace('/(onboarding)/name');
-      }
+      router.replace(authLanding(user));
     },
-    onError: () => {
+    onError: (error) => {
+      const delay = verificationRetryDelay(error, 'verify');
+      if (delay) setVerificationDelay(delay);
+      setCode('');
+      submittedFor.current = null;
       haptics.error();
-      setCode('');
-      submittedFor.current = null;
     },
+    onSettled: () => { verifying.current = false; },
   });
-
   const resend = useMutation({
-    mutationFn: () =>
-      services.auth.requestOtp({
-        email: params.email,
-      }),
-    onSuccess: (challenge) => {
-      haptics.light();
-      setChallengeId(challenge.challengeId);
-      setSecondsLeft(challenge.resendAfterSeconds);
+    mutationFn: () => services.auth.requestPhoneOtp({ phone: challenge!.phone, purpose, ...(purpose === 'register' ? { fullName } : {}) }),
+    onSuccess: (next) => {
+      setChallenge(next);
       setCode('');
       submittedFor.current = null;
+      verify.reset();
+      haptics.light();
+    },
+    onError: (error) => {
+      const delay = retryDelaySeconds(error);
+      if (delay) setRetryDelay(delay);
+      const verificationDelay = verificationRetryDelay(error, 'send');
+      if (verificationDelay) setVerificationDelay(verificationDelay);
     },
   });
-
-  // Auto-submit once the code is complete, but only once per distinct code.
-  const handleComplete = useCallback(
-    (value: string) => {
-      if (submittedFor.current === value || verify.isPending) return;
-      submittedFor.current = value;
-      verify.mutate(value);
-    },
-    [verify],
-  );
-
-  const isComplete = code.length === CODE_LENGTH;
-
+  if (!challenge) return <Redirect href={user ? authLanding(user) : '/(onboarding)/phone'} />;
+  const blocked = verify.isPending || resend.isPending || lockSeconds > 0 || expirySeconds === 0;
+  const submit = (value: string) => {
+    if (!/^\d{6}$/.test(value) || blocked || verifying.current || submittedFor.current === value) return;
+    verifying.current = true;
+    submittedFor.current = value;
+    verify.mutate(value);
+  };
+  const waitSeconds = Math.max(resendSeconds, lockSeconds);
   return (
     <Screen keyboardAvoiding>
       <AppHeader />
-
       <Reveal style={{ gap: spacing.sm }}>
-        <AppText variant="h1">{t('onboarding.otpTitle')}</AppText>
-        <AppText variant="bodyLg" color="textSecondary">
-          {t('onboarding.otpSubtitle', { email: params.email })}
-        </AppText>
+        <AppText variant="h1">{t('onboarding.otpPhoneTitle')}</AppText>
+        <AppText variant="bodyLg" color="textSecondary">{t(challenge.delivery === 'sms' ? 'onboarding.otpPhoneSubtitle' : 'onboarding.otpDevSubtitle', { phone: challenge.phone })}</AppText>
       </Reveal>
-
-      <View style={{ marginTop: spacing.xxxl, gap: spacing.xl }}>
-        <OtpInput
-          value={code}
-          onChangeText={setCode}
-          length={CODE_LENGTH}
-          hasError={verify.isError}
-          disabled={verify.isPending || resend.isPending}
-          onComplete={handleComplete}
-          testID="otp-input"
-        />
-
-        {verify.isError ? (
-          <InlineNotice tone="danger" title={t('onboarding.otpInvalid')} body={errorMessage(verify.error)} />
-        ) : null}
-
+      <View style={{ marginTop: spacing.xxxl, gap: spacing.lg }}>
+        {challenge.delivery === 'development' ? <InlineNotice tone="warning" title={t('onboarding.devDeliveryTitle')} body={t('onboarding.devDeliveryBody')} /> : null}
+        <OtpInput value={code} onChangeText={setCode} length={6} hasError={verify.isError} disabled={blocked} onComplete={submit} testID="otp-input" />
+        <AppText variant="bodySm" color="textSecondary">{t('onboarding.otpSecurity')}</AppText>
+        {expirySeconds === 0 ? <InlineNotice tone="warning" title={t('onboarding.otpExpired')} body={t('onboarding.otpExpiredBody')} /> : null}
+        {verify.isError ? <InlineNotice tone="danger" title={t('onboarding.otpVerifyFailed')} body={errorMessage(verify.error)} /> : null}
         {resend.isError ? <InlineNotice tone="danger" title={t('common.somethingWrong')} body={errorMessage(resend.error)} /> : null}
-
+        {lockSeconds > 0 ? <InlineNotice tone="warning" title={t('onboarding.otpWait')} body={t('onboarding.otpRetryIn', { seconds: lockSeconds })} /> : null}
         <View style={{ alignItems: 'center', gap: spacing.md }}>
-          {secondsLeft > 0 ? (
-            <AppText variant="bodySm" color="textTertiary" numeric>
-              {t('onboarding.otpResendIn', { seconds: secondsLeft })}
-            </AppText>
-          ) : (
+          {waitSeconds > 0 ? <AppText variant="bodySm" color="textTertiary" numeric>{t('onboarding.otpResendIn', { seconds: waitSeconds })}</AppText> : (
             <PressableScale disabled={resend.isPending || verify.isPending} onPress={() => resend.mutate()} haptic="light" hitSlop={10}>
-              <AppText variant="label" color="brand">
-                {resend.isPending ? t('common.loading') : t('onboarding.otpResend')}
-              </AppText>
+              <AppText variant="label" color="brand">{resend.isPending ? t('common.loading') : t('onboarding.otpResend')}</AppText>
             </PressableScale>
           )}
-
-          <PressableScale onPress={() => router.back()} haptic="light" hitSlop={10}>
-            <AppText variant="bodySm" color="textSecondary">
-              {t('onboarding.otpChangeEmail')}
-            </AppText>
+          <PressableScale disabled={verify.isPending || resend.isPending} onPress={() => router.replace('/(onboarding)/phone')} haptic="light" hitSlop={10}>
+            <AppText variant="bodySm" color="textSecondary">{t('onboarding.otpChangePhone')}</AppText>
           </PressableScale>
         </View>
       </View>
-
-      <View style={{ flex: 1 }} />
-
-      <AppButton
-        label={t('common.continue')}
-        disabled={!isComplete}
-        loading={verify.isPending}
-        onPress={() => handleComplete(code)}
-        testID="otp-continue"
-      />
+      <View style={{ flex: 1, minHeight: spacing.xl }} />
+      <AppButton label={t('common.continue')} disabled={code.length !== 6 || blocked} loading={verify.isPending} onPress={() => submit(code)} testID="otp-continue" />
     </Screen>
   );
 }

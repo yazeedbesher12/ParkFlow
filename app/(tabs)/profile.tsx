@@ -10,6 +10,7 @@ import {
   CreditCard,
   Info,
   LogOut,
+  ShieldCheck,
   ScrollText,
   Settings,
   TriangleAlert,
@@ -115,6 +116,18 @@ export default function ProfileScreen() {
         </Card>
 
         <Card padding="lg" style={{ paddingVertical: spacing.xs }}>
+          {user?.role === 'ADMIN' ? (
+            <>
+              <ListItem
+                title={t('admin.title')}
+                subtitle={t('admin.subtitle')}
+                leading={<MenuIcon><ShieldCheck {...iconProps} /></MenuIcon>}
+                showChevron
+                onPress={() => router.push('/admin')}
+              />
+              <Divider inset={52} />
+            </>
+          ) : null}
           <ListItem
             title={t('points.menu')}
             subtitle={

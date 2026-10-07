@@ -6,30 +6,54 @@ import { services, type StartSessionInput } from '@/services';
 import { computeSessionBreakdown } from '@/utils/pricing';
 import { queryKeys } from './queryKeys';
 import { useUserId } from './useSession';
+import { newQueueKey, retryQueue } from '@/offline/retryQueue';
+import { AppError } from '@/utils/errors';
+import { cachedRead } from '@/offline/storage';
 
 export function useZones(search?: string) {
+  const userId = useUserId();
   return useQuery({
     queryKey: queryKeys.zones(search),
-    queryFn: () => services.parking.listZones(search ? { search } : undefined),
+    queryFn: () => userId
+      ? cachedRead(userId, `zones.${search ?? 'all'}`, () => services.parking.listZones(search ? { search } : undefined))
+      : services.parking.listZones(search ? { search } : undefined),
     staleTime: 60_000,
   });
 }
 
 export function useZone(zoneId?: string) {
+  const userId = useUserId();
   return useQuery({
     queryKey: queryKeys.zone(zoneId ?? ''),
-    queryFn: () => services.parking.getZone(zoneId!),
+    queryFn: () => userId
+      ? cachedRead(userId, `zone.${zoneId!}`, () => services.parking.getZone(zoneId!))
+      : services.parking.getZone(zoneId!),
     enabled: Boolean(zoneId),
     staleTime: 60_000,
   });
 }
 
 export function useParkingLayout(parkingId?: string) {
+  const userId = useUserId();
   return useQuery({
     queryKey: queryKeys.parkingLayout(parkingId ?? ''),
-    queryFn: () => services.parking.getLayout(parkingId!),
+    queryFn: () => userId
+      ? cachedRead(userId, `parkingLayout.${parkingId!}`, () => services.parking.getLayout(parkingId!))
+      : services.parking.getLayout(parkingId!),
     enabled: Boolean(parkingId),
     staleTime: Infinity,
+  });
+}
+
+export function useFacilityNavigation(facilityId?: string) {
+  const userId = useUserId();
+  return useQuery({
+    queryKey: ['facility-navigation', facilityId ?? ''],
+    queryFn: () => userId
+      ? cachedRead(userId, `facilityNavigation.${facilityId!}`, () => services.parking.getFacilityNavigation(facilityId!))
+      : services.parking.getFacilityNavigation(facilityId!),
+    enabled: Boolean(facilityId),
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -115,6 +139,27 @@ export function useSettleSession() {
   return useMutation({
     mutationFn: (sessionId: string) => services.parking.settleSession(sessionId),
     onSuccess: invalidate,
+  });
+}
+
+export function useSubmitParkingFeedback() {
+  const userId = useUserId();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Omit<Parameters<typeof services.parking.submitParkingFeedback>[0], 'userId' | 'idempotencyKey'>) => {
+      const idempotencyKey = newQueueKey(`feedback-${input.zoneId}-${input.outcome}`);
+      try {
+        return await services.parking.submitParkingFeedback({ ...input, userId: userId!, idempotencyKey });
+      } catch (error) {
+        if (!userId || !(error instanceof AppError) || error.code !== 'network') throw error;
+        await retryQueue.enqueue({ userId, createdAt: new Date().toISOString(), idempotencyKey, mutation: { kind: 'parking-feedback', payload: input } });
+        throw new AppError('network', 'Saved to send when online.', { queued: true });
+      }
+    },
+    onSuccess: (_feedback, input) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.zone(input.zoneId) });
+      void queryClient.invalidateQueries({ queryKey: ['zones'] });
+    },
   });
 }
 

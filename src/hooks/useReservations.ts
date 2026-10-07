@@ -1,23 +1,39 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { services } from '@/services';
-import type { CreateParkingReservationInput } from '@/types';
+import type { CreateParkingReservationInput, ParkingReservationSelection } from '@/types';
 import { queryKeys } from './queryKeys';
 import { useUserId } from './useSession';
+import { cachedRead } from '@/offline/storage';
+
+/** Quotes always come from the server and are never served from offline storage. */
+export function useReservationQuote(input: ParkingReservationSelection, zoneVersion?: number) {
+  const userId = useUserId();
+  return useQuery({
+    queryKey: ['reservation-quote', userId, input.zoneId, input.startTime, input.durationMinutes, zoneVersion],
+    queryFn: () => services.parking.quoteReservation(input),
+    enabled: Boolean(userId && input.zoneId),
+    staleTime: 0,
+    retry: false,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: 'always',
+  });
+}
 
 export function useReservations() {
   const userId = useUserId();
   return useQuery({
     queryKey: queryKeys.reservations(userId ?? 'anonymous'),
-    queryFn: () => services.parking.listReservations(),
+    queryFn: () => cachedRead(userId!, 'reservations', () => services.parking.listReservations()),
     enabled: Boolean(userId),
   });
 }
 
 export function useReservation(reservationId?: string) {
+  const userId = useUserId();
   return useQuery({
     queryKey: queryKeys.reservation(reservationId ?? ''),
-    queryFn: () => services.parking.getReservation(reservationId!),
-    enabled: Boolean(reservationId),
+    queryFn: () => cachedRead(userId!, `reservation.${reservationId!}`, () => services.parking.getReservation(reservationId!)),
+    enabled: Boolean(userId && reservationId),
   });
 }
 

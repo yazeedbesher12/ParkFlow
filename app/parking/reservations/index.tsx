@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CalendarCheck, CalendarX } from 'lucide-react-native';
-import { AppHeader, AppText, Card, Divider, EmptyState, ErrorState, ListItem, Screen, Segmented, Skeleton, StatusBadge } from '@/components/ui';
+import { AppHeader, AppText, Card, Divider, EmptyState, ErrorState, ListItem, Screen, Segmented, Skeleton, StatusBadge, OfflineStaleNotice } from '@/components/ui';
 import { useReservations } from '@/hooks/useReservations';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -32,6 +32,7 @@ export default function ReservationsScreen() {
         { value: 'upcoming', label: t('reservation.upcoming'), badge: groups.upcoming.length },
         { value: 'previous', label: t('reservation.previous'), badge: groups.previous.length },
       ]} />
+      <OfflineStaleNotice cacheKey="reservations" />
       {isPending ? <View style={{ gap: spacing.md }}><Skeleton height={104} /><Skeleton height={104} /></View>
         : isError ? <ErrorState error={error} onRetry={() => void refetch()} />
         : visible.length === 0 ? <EmptyState icon={tab === 'upcoming' ? <CalendarCheck size={30} color={colors.brand} /> : <CalendarX size={30} color={colors.textSecondary} />}

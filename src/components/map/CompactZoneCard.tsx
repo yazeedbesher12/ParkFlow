@@ -1,7 +1,7 @@
 import { CircleParking, Footprints } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { AppText, PressableScale } from '@/components/ui';
+import { AppText, PressableScale, StatusBadge } from '@/components/ui';
 import { availabilityTone } from './ZoneMarker';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -10,6 +10,7 @@ import { spacing } from '@/theme/spacing';
 import type { ParkingZone } from '@/types';
 import { formatRate } from '@/utils/money';
 import { walkingMinutes } from '@/utils/geo';
+import { scoreParkingOption } from '@/utils/parkingScore';
 
 export interface NearbyZone {
   zone: ParkingZone;
@@ -29,13 +30,23 @@ export function CompactZoneCard({ item, onPress }: { item: NearbyZone; onPress: 
     neutral: colors.textTertiary,
     info: colors.info,
   }[tone];
+  const provenance = zone.availabilityProvenance ?? zone.provenance;
+  const freshness = provenance?.freshness ?? 'unknown';
+  const source = provenance?.source ?? 'unknown';
+  const provenanceLabel = t(`zone.freshness.${freshness}` as never);
+  const sourceLabel = t(`zone.source.${source}` as never);
+  const score = scoreParkingOption({
+    walkMeters: distanceMeters,
+    price: zone.tariff.hourlyRate,
+    confidence: provenance?.confidence,
+  });
 
   return (
     <PressableScale
       onPress={onPress}
       haptic="select"
       accessibilityRole="button"
-      accessibilityLabel={`${name}, ${t(`zone.${zone.availability}` as const)}, ${formatRate(zone.tariff.hourlyRate)}`}
+      accessibilityLabel={`${name}, ${t(`zone.${zone.availability}` as const)}, ${sourceLabel}, ${provenanceLabel}, ${formatRate(zone.tariff.hourlyRate)}`}
       style={{
         minHeight: 58,
         flexDirection: row,
@@ -71,12 +82,16 @@ export function CompactZoneCard({ item, onPress }: { item: NearbyZone; onPress: 
               {t(`zone.${zone.availability}` as const)}
             </AppText>
           </View>
+          <StatusBadge label={provenanceLabel} tone={freshness === 'fresh' ? 'success' : freshness === 'aging' ? 'warning' : freshness === 'unknown' ? 'neutral' : 'danger'} size="sm" showDot={false} />
           <View style={{ flexDirection: row, alignItems: 'center', gap: 3 }}>
             <Footprints size={11} color={colors.textTertiary} strokeWidth={2.2} />
             <AppText variant="caption" color="textTertiary" numeric numberOfLines={1}>
               {t('map.walkMinutes', { minutes: walkingMinutes(distanceMeters) })}
             </AppText>
           </View>
+          <AppText variant="caption" color="textTertiary" numeric numberOfLines={1}>
+            {t('map.score', { score: Math.round(score) })}
+          </AppText>
         </View>
       </View>
 

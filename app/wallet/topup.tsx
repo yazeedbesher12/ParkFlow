@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { CreditCard, Plus } from 'lucide-react-native';
@@ -29,6 +30,8 @@ import { useIdempotencyKey } from '@/hooks/useIdempotencyKey';
 import { formatMoney, toMinor } from '@/utils/money';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
+import { useAuthStore } from '@/store/authStore';
+import { topUpRecovery } from '@/services/http/walletService';
 
 const PRESETS = [2000, 5000, 10000];
 const MIN_TOPUP = 500;
@@ -37,7 +40,9 @@ const MAX_TOPUP = 100000;
 export default function TopUpScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { t, row } = useLocale();
+  const { t, row, locale } = useLocale();
+  const userId = useAuthStore(state => state.user?.id);
+  const recovery = useQuery({ queryKey: ['pending-topup', userId], enabled: Boolean(userId), queryFn: () => topUpRecovery.read(userId!), staleTime: 0 });
   const params = useLocalSearchParams<{ amount?: string }>();
 
   const { data: wallet, isPending } = useWallet();
@@ -71,7 +76,7 @@ export default function TopUpScreen() {
           idempotency.reset();
           setSuccessOpen(true);
         },
-        onError: () => haptics.error(),
+        onError: () => { haptics.error(); void recovery.refetch(); },
       },
     );
   };
@@ -81,6 +86,16 @@ export default function TopUpScreen() {
       <AppHeader title={t('wallet.topUp')} leading="close" />
 
       <View style={{ gap: spacing.xl }}>
+        {recovery.error ? <InlineNotice tone="danger" title={locale === 'ar' ? 'تعذر التحقق من الشحن السابق' : 'Could not check the previous payment'} body={errorMessage(recovery.error)} /> : null}
+        {recovery.data ? <Card padding="lg" style={{ gap: spacing.md }}>
+          <AppText variant="title">{locale === 'ar' ? 'يوجد شحن بانتظار تأكيد النتيجة' : 'A previous top-up needs confirmation'}</AppText>
+          <MoneyText value={recovery.data.payload.amount} />
+          <AppText>{locale === 'ar' ? 'تابع العملية السابقة قبل بدء شحن جديد لتجنّب تكرار الدفع.' : 'Resume the previous payment before starting another top-up to avoid duplicate charges.'}</AppText>
+          <AppButton label={locale === 'ar' ? 'متابعة الشحن السابق' : 'Resume previous top-up'} loading={topUp.isPending} onPress={() => {
+            const pending = recovery.data!;
+            topUp.mutate({ ...pending.payload, idempotencyKey: pending.key }, { onSuccess: () => { idempotency.reset(); void recovery.refetch(); setSuccessOpen(true); }, onError: () => { void recovery.refetch(); } });
+          }} />
+        </Card> : null}
         <Card padding="lg" style={{ gap: spacing.sm }}>
           <AppText variant="label" color="textSecondary">
             {t('wallet.balance')}
@@ -246,7 +261,7 @@ export default function TopUpScreen() {
           label={t('wallet.topUp')}
           onPress={handleTopUp}
           loading={topUp.isPending}
-          disabled={!defaultMethod || !amountValid}
+          disabled={!defaultMethod || !amountValid || recovery.isPending || Boolean(recovery.data) || Boolean(recovery.error)}
           testID="topup-cta"
         />
       </View>
@@ -266,7 +281,7 @@ export default function TopUpScreen() {
               {t('wallet.topUpSuccess')}
             </AppText>
             <AppText variant="body" color="textSecondary" align="center">
-              {t('wallet.topUpSuccessBody', { amount: formatMoney(effectiveAmount) })}
+              {t('wallet.topUpSuccessBody', { amount: formatMoney(topUp.data?.transaction.amount ?? 0) })}
             </AppText>
           </View>
 

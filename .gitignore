@@ -76,3 +76,12 @@ coverage/
 
 # Logs
 *.log
+# Local database backups contain private application data.
+server/.backups/
+dist-platform-check/
+
+# Local assistant sessions and private provider diagnostics
+.superpowers/
+TWILIO_DELIVERY_SUPPORT.txt
+twilio-ticket-*.jpg
+twilio-ticket-*.png

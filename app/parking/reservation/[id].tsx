@@ -10,6 +10,7 @@ import {
   DetailRow,
   ErrorState,
   InlineNotice,
+  OfflineStaleNotice,
   Screen,
   Skeleton,
   StatusBadge,
@@ -33,6 +34,8 @@ export default function ReservationDetailsScreen() {
   const { data: reservation, isPending, isError, error, refetch } = useReservation(id);
   const cancel = useCancelReservation();
   const canCancel = reservation?.status === 'confirmed' && Date.parse(reservation.startTime) > Date.now();
+  const isLiveInventory = reservation?.inventoryMode === 'live';
+  const liveFeedVerified = isLiveInventory && reservation?.guarantee === 'operator_backed';
 
   const routeToParking = () => {
     if (!reservation) return;
@@ -42,6 +45,7 @@ export default function ReservationDetailsScreen() {
 
   return <Screen bottomInset={spacing.giant}>
     <AppHeader title={created === '1' ? t('reservation.successTitle') : t('reservation.detailsTitle')} />
+    <OfflineStaleNotice cacheKey={`reservation.${id}`} />
     {isError ? <ErrorState error={error} onRetry={() => void refetch()} />
       : isPending || !reservation ? <View style={{ gap: spacing.lg }}><Skeleton height={120} /><Skeleton height={260} /><Skeleton height={180} /></View> : <View style={{ gap: spacing.lg }}>
         {created === '1' ? <View style={{ alignItems: 'center', gap: spacing.sm }}><SuccessCheck /><AppText variant="body" color="textSecondary" align="center">{t('reservation.successBody')}</AppText></View> : null}
@@ -57,14 +61,24 @@ export default function ReservationDetailsScreen() {
           <DetailRow label={t('reservation.duration')} value={formatDurationShort(reservation.durationMinutes * 60)} />
           <DetailRow label={t('reservation.hourlyRate')} value={`${formatRate(reservation.hourlyRateSnapshot)}${t('common.perHour')}`} />
           <DetailRow label={t('reservation.estimatedTotal')} value={formatMoney(reservation.estimatedTotalPriceSnapshot)} />
-          <AppText variant="caption" color="textTertiary">{reservation.priceIsDemo ? t('reservation.demoPrice') : t('reservation.officialPrice')}</AppText>
+          <DetailRow label={t('reservation.checkInState')} value={reservation.status === 'checked_in' ? t('reservation.checkedIn') : t('reservation.checkInPending')} />
+          {reservation.holdExpiresAt ? <DetailRow label={t('reservation.holdExpires')} value={formatDateTime(reservation.holdExpiresAt, dateLocale)} /> : null}
+          <AppText variant="caption" color={liveFeedVerified ? 'successText' : isLiveInventory ? 'warningText' : 'textTertiary'}>
+            {isLiveInventory
+              ? reservation.guarantee === 'operator_backed' ? t('reservation.guaranteeOperator') : t('reservation.guaranteeNone')
+              : t('reservation.inventoryDemo')}
+          </AppText>
         </Card>
         {(reservation.status === 'confirmed' || reservation.status === 'checked_in') ? <Card padding="xl" style={{ alignItems: 'center', gap: spacing.md }}>
           <QrCode size={20} color={colors.textSecondary} />
           <QRCode value={reservation.qrValue} size={196} color={colors.text} backgroundColor={colors.surface} />
           <AppText variant="caption" color="textTertiary" align="center">{t('reservation.qrHint')}</AppText>
         </Card> : null}
-        <InlineNotice tone="warning" title={t('reservation.demoTitle')} body={t('reservation.demoDisclaimer')} />
+        <InlineNotice
+          tone={liveFeedVerified ? 'info' : 'warning'}
+          title={!isLiveInventory ? t('reservation.demoTitle') : liveFeedVerified ? t('reservation.liveTitle') : t('reservation.liveUnverifiedTitle')}
+          body={!isLiveInventory ? t('reservation.demoDisclaimer') : liveFeedVerified ? t('reservation.liveDisclaimer') : t('reservation.liveUnverifiedBody')}
+        />
         {cancel.isError ? <AppText variant="caption" color="danger">{errorMessage(cancel.error)}</AppText> : null}
         <AppButton label={t('reservation.route')} variant="secondary" icon={<Navigation size={18} color={colors.text} />} onPress={routeToParking} />
         {canCancel ? <AppButton label={t('reservation.cancel')} variant="danger" loading={cancel.isPending} onPress={() => cancel.mutate(reservation.id, { onSuccess: () => haptics.success(), onError: () => haptics.error() })} /> : null}

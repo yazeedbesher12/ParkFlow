@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View, type DimensionValue } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, ArrowRight, CarFront, RefreshCw } from 'lucide-react-native';
-import { AppButton, AppHeader, AppText, Card, ErrorState, InlineNotice, Screen, Skeleton, StatusBadge } from '@/components/ui';
+import { AppButton, AppHeader, AppText, Card, ErrorState, InlineNotice, Screen, Skeleton, StatusBadge, OfflineStaleNotice } from '@/components/ui';
 import { useParkingLayout } from '@/hooks/useParking';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -22,6 +22,7 @@ export default function ParkingLayoutScreen() {
   const autoAssigned = useMemo(() => layout?.spots
     .filter((spot) => spot.state === 'available' && spot.type === 'regular')
     .sort((a, b) => a.code.localeCompare(b.code))[0], [layout]);
+  const isDemoLayout = layout?.isDemo !== false;
 
   const continueWith = (spot?: ParkingLayoutSpot) => {
     if (!layout || !spot) return;
@@ -40,6 +41,7 @@ export default function ParkingLayoutScreen() {
         icon={<RefreshCw size={17} color={colors.textSecondary} />}
         loading={isRefetching} onPress={() => void refetch()} />}
     />
+    <OfflineStaleNotice cacheKey={`parkingLayout.${zoneId}`} />
     {isError ? <ErrorState error={error} onRetry={() => void refetch()} />
       : isPending || !layout ? <View style={{ gap: spacing.lg }}><Skeleton height={90} /><Skeleton height={540} /><Skeleton height={180} /></View>
       : <View style={{ gap: spacing.lg }}>
@@ -49,7 +51,7 @@ export default function ParkingLayoutScreen() {
             <AppText variant="caption" color="textSecondary">{t('parkingLayout.sectionCount', { count: layout.section.spaceCount })}</AppText>
           </View>
           <View style={{ alignItems: 'flex-end', gap: spacing.xs }}>
-            <StatusBadge label={t('parkingLayout.demo')} tone="warning" showDot={false} />
+            <StatusBadge label={isDemoLayout ? t('parkingLayout.demo') : t('reservation.inventoryLive')} tone={isDemoLayout ? 'warning' : 'success'} showDot={false} />
             <AppText variant="caption" color="successText">{t('parkingLayout.availableCount', { count: availableCount })}</AppText>
           </View>
         </View>
@@ -71,7 +73,7 @@ export default function ParkingLayoutScreen() {
           <AppButton label={t('parkingLayout.autoAssign')} variant="secondary" onPress={() => continueWith(autoAssigned)} disabled={!autoAssigned} />
         </Card>
 
-        <InlineNotice tone="warning" title={t('parkingLayout.demo')} body={t('parkingLayout.disclaimer')} />
+        <InlineNotice tone={isDemoLayout ? 'warning' : 'info'} title={isDemoLayout ? t('parkingLayout.demo') : t('reservation.liveTitle')} body={isDemoLayout ? t('parkingLayout.disclaimer') : t('reservation.liveDisclaimer')} />
         <AppText variant="caption" color="textTertiary" align="center">
           {t('parkingLayout.lastUpdated', { value: new Intl.DateTimeFormat(dateLocale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(layout.lastUpdated)) })}
         </AppText>

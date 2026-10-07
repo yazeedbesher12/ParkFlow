@@ -10,3 +10,8 @@ import './modules/reservations/routes';
 import './modules/violations/routes';
 import './modules/notifications/routes';
 import './modules/admin/routes';
+import './modules/operator/routes';
+import './modules/forecasting/routes';
+import './modules/management/routes';
+import './modules/appConfig/routes';
+import './modules/vehicleVerification/routes';

@@ -22,5 +22,6 @@ export * from './SwitchRow';
 export * from './Avatar';
 export * from './SuccessCheck';
 export * from './InlineNotice';
+export * from './OfflineStaleNotice';
 export * from './OtpInput';
 export * from './Reveal';

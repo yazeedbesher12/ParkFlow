@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: parkflow
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-parkflow}
@@ -17,6 +18,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     command: redis-server --appendonly yes
     ports:
       - "127.0.0.1:6381:6379"
@@ -48,6 +50,7 @@ services:
     restart: unless-stopped
 
   backend:
+    platform: linux/amd64
     build: .
     env_file:
       - .env
@@ -58,6 +61,12 @@ services:
     ports:
       - "4000:4000"
     command: sh -c "npx prisma migrate deploy && node dist/src/server.js"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,6 +77,7 @@ services:
     restart: unless-stopped
 
   worker:
+    platform: linux/amd64
     build: .
     env_file:
       - .env
@@ -84,7 +94,7 @@ services:
       minio:
         condition: service_healthy
       backend:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

@@ -1,5 +1,5 @@
 import type { ParkingService, StartSessionInput } from './types';
-import type { ParkingSession, ParkingZone } from '@/types';
+import type { ParkingFeedback, ParkingSession, ParkingZone } from '@/types';
 import { AppError } from '@/utils/errors';
 import { createId } from '@/utils/id';
 import { networkDelay } from '@/utils/async';
@@ -102,6 +102,7 @@ function settle(db: MockDatabase, session: ParkingSession, amount: number): bool
 type LegacyMockParkingService = Omit<
   ParkingService,
   | 'getLayout'
+  | 'quoteReservation'
   | 'createReservation'
   | 'listReservations'
   | 'getReservation'
@@ -155,6 +156,10 @@ export const mockParkingService: LegacyMockParkingService = {
     const facility = FACILITIES.find((f) => f.id === facilityId);
     if (!facility) throw new AppError('not_found', 'Facility not found');
     return facility;
+  },
+  async getFacilityNavigation(facilityId) {
+    const facility = await this.getFacility(facilityId);
+    return { facilityId, levels: facility.levels, entrances: facility.entrances ?? [], exits: facility.exits ?? [], walkingDestinations: facility.walkingDestinations ?? [] };
   },
 
   async startSession(input: StartSessionInput) {
@@ -389,6 +394,22 @@ export const mockParkingService: LegacyMockParkingService = {
       session.updatedAt = nowIso();
       return { ...session };
     });
+  },
+
+  async submitParkingFeedback(input) {
+    await networkDelay(80, 160);
+    const feedback: ParkingFeedback = {
+      id: createId('feedback'),
+      userId: input.userId,
+      zoneId: input.zoneId,
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+      ...(input.reservationId ? { reservationId: input.reservationId } : {}),
+      outcome: input.outcome,
+      ...(input.delayBucket ? { delayBucket: input.delayBucket } : {}),
+      idempotencyKey: input.idempotencyKey,
+      createdAt: nowIso(),
+    };
+    return feedback;
   },
 
   async getSession(sessionId) {

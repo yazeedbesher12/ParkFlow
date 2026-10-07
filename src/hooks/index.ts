@@ -10,3 +10,4 @@ export * from './useIdempotencyKey';
 export * from './useInstantMotion';
 export * from './useBlockHardwareBack';
 export * from './queryKeys';
+export * from './useOperator';

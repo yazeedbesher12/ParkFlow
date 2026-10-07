@@ -11,6 +11,7 @@ import {
   ErrorState,
   Screen,
   SkeletonGroup,
+  OfflineStaleNotice,
 } from '@/components/ui';
 import { VehicleCard } from '@/components/domain/VehicleCard';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -50,6 +51,7 @@ export default function VehiclesScreen() {
       <View style={{ paddingBottom: spacing.md }}>
         <AppText variant="h1">{t('vehicle.myVehicles')}</AppText>
       </View>
+      <OfflineStaleNotice cacheKey="vehicles" />
 
       {isPending ? (
         <SkeletonGroup count={3} height={112} />

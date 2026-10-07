@@ -1,0 +1,59 @@
+ParkFlow — implementation security and readiness review
+2026-10-07
+
+Scope and conclusion
+Compared the implementation with docs/superpowers/plans/2026-10-07-platform-management.md and the approved launch-readiness.txt proposal. This is a source review plus the targeted execution evidence below, not a production security certification. Significant pilot protections are implemented; public production acceptance still has explicit gates. No secret values were inspected, no live payments or external messages were sent, and SMS follow-up remains suspended.
+
+Implemented protections inspected
+1. Vehicle access: self-added/relinked plates become unverified drivers. Violation details, evidence and permits require verified access; association alone does not grant ownership. Admin review requires a 10–500-character reason, records an audit, and revocation clears verification and returns the role to driver. The bilingual UI confirms person, plate, role and evidence reference before submission.
+   Evidence: server/src/modules/vehicles/service.ts:6,19; modules/violations/service.ts:12; modules/vehicleVerification/service.ts:22; app/admin/vehicles.tsx.
+   Final review found and fixed two remaining paths: violation notifications now target verified active associations only, and the legacy admin vehicle-grant endpoint now requires and audits the review reason. Evidence: server/src/modules/admin/service.ts:42,78; modules/admin/routes.ts:40. Existing historical notifications are not retrospectively erased.
+
+2. Inventory: a transactional zone-wide pool respects explicit physical vacancy/occupancy, full/unknown state, fresh authenticated OPERATOR or ADMIN counts, overlapping commitments, and a 500-token cap. Checked-in demand is reconciled against snapshot/check-in timestamps conservatively. SENSOR/ANPR sources are not accepted by the manual provider; ADMIN counts do not claim an operator-backed guarantee. Tokens describe allocations, not surveyed empty bays.
+   Evidence: server/src/modules/inventory/manualProvider.ts:15,37,97; modules/reservations/service.ts. Summing overlapping commitments can under-offer capacity for a long window; no departure forecast or physical sensor integration was proven.
+
+3. Session/location integrity: active published lifecycle is required for public search/details/code lookup and new sessions/reservations. Prepaid starts and extensions reject closure overlap; ending exactly at closure start is allowed. Extensions retain original pricing snapshots. Start-stop initiation checks the current instant; no automatic termination at a later closure was added. Lock order is zone→vehicle/session/hold→wallet where applicable; no reverse acquisition was found in the reviewed flows.
+   Evidence: server/src/modules/sessions/service.ts:14,19,56; modules/parking/service.ts; modules/parking/layouts.ts. Reservation cancellation now conditionally updates confirmed future bookings under transaction/locks, preserving a concurrent check-in (modules/reservations/service.ts:174).
+
+4. Administration: shared operator/zone action permissions separate owner, manager and attendant; existing admin aliases delegate management mutations through that boundary. Version checks reject stale edits; disruptive changes inspect existing use; owners submit locations for admin publication. New locations use live/manual, non-prototype inventory. Last-admin and permission-change session revocation guards are present.
+   Evidence: server/src/modules/management/permissions.ts; modules/management/service.ts; modules/admin/service.ts:63. This paragraph records source inspection, not a fresh execution of every management scenario.
+
+5. Admin sessions now have an absolute eight-hour family lifetime in both authenticate and refresh. Rotated/revoked ancestors establish the original deadline, and expiry revocation commits before the denial is thrown. Ordinary-user lifetime is unchanged. Legacy public road/parking report responses remove stable reporter IDs.
+   Evidence: server/src/modules/auth/service.ts:13,77,98; modules/roads/service.ts:7,18.
+
+6. CMS boundaries: ADMIN-only draft/history/publish/rollback routes; strict bounded schema; plain localized text, fixed action paths, HTTPS image URLs without embedded credentials, hex colors. Public responses expose validated published configuration only. Global lock/version checks guard publication; publishing and rollback append revisions and audit events. The renderer uses Text/Image components, not executable HTML. Revision immutability is enforced by service behavior; this does not establish protection against direct database-administrator tampering. External images are client-fetched, not server-fetched.
+   Evidence: server/src/modules/appConfig/{schema,service,routes}.ts; src/types/appConfig.ts; src/components/brand/ConfiguredWelcome.tsx; src/store/appConfigStore.ts.
+
+7. Payment recovery persists a user-scoped logical top-up key/payload before sending and retains ambiguous outcomes; changed payloads cannot silently replace a pending operation. Existing server ledger, idempotency, webhook-signature and amount/currency checks remain. Production configuration rejects development payments, but a real card SDK/tokenization and gateway acceptance are still outstanding.
+   Evidence: src/utils/pendingPayment.ts; src/services/http/walletService.ts; server/src/modules/wallet/service.ts; server/src/providers/payments.ts; server/src/config/env.ts. Cross-tab/device recovery and real provider behavior were not exercised in this review.
+
+Execution evidence personally observed
+- Inventory + session closures + public lifecycle: RED 10 failed/34 passed, then GREEN 44/44 using `npm.cmd test -- tests/session-closures.test.ts tests/reservation-inventory.test.ts --reporter=dot`.
+- Admin absolute lifetime: RED 3 failed/2 passed, then GREEN 5/5 in admin-session-lifetime.test.ts.
+- Vehicle privacy and legacy grant policy: RED 3 failed/5 passed, then GREEN 8/8 in vehicle-verification.test.ts, including notification/outbox recipient assertions. OTP delivery was mocked; no notification worker/external push was invoked.
+- Client typecheck exit 0 was observed earlier in this implementation; server typecheck exit 0 was observed after the final vehicle fixes.
+- All DB execution used the guarded dedicated _test database, one runner at a time. No additional DB tests were run during the read-only report work. The final combined suite, rebuilt application and deployment validation remain the root integration task; their completion is not claimed here. CMS/management/payment test source was reviewed, but their complete suites were not independently rerun for this report.
+
+Dependency snapshot (local audit JSON inspected)
+- Client after compatible patches: 30 affected package entries — 19 high, 11 moderate, 0 critical (docs/reviews/2026-10-07-client-audit.json).
+- Server after root's compatible audit fix and saved recheck: 2 moderate, 0 high, 0 critical (2026-10-07-server-audit.json). The source-map-js high advisory was removed; uuid/gaxios remain.
+These counts are package/advisory findings, not independently proven reachable exploitation paths. No forced Expo downgrade or zero-vulnerability claim is justified by these results.
+
+Production acceptance gates still open
+- Admin MFA/step-up verification and recovery controls; the eight-hour limit is not MFA.
+- HttpOnly/Secure/SameSite web session design with CSRF protection as appropriate. Current web storage falls back to JavaScript-readable AsyncStorage (src/services/storage.ts:28); native storage uses SecureStore. No XSS exploit was demonstrated.
+- Real provider card capture/tokenization, gateway settlement/refund and ambiguous-result acceptance; owner payouts/subscriptions are not delivered by operational analytics or internal wallet adjustments.
+- Production HTTPS/origins/CSP validation, managed database/Redis/object-storage permissions, secret provisioning, monitoring, backup/restore drills, recovery targets and incident procedures. Local tests do not validate these external infrastructure controls.
+  Root completed a local pre-migration pg_dump and restored it successfully into a newly created isolated database (44 public tables); that temporary database was then removed. The backup is retained locally and excluded from Git/build context. This verifies local restore mechanics, not production retention or disaster recovery targets.
+- Real ownership/authorization evidence and a support/dispute process for vehicle verification, including review of pre-existing unverified associations.
+- Arabic/English admin/owner/user browser journeys and narrow/wide rendering QA. Browser QA was reported blocked by the browser URL policy; no completed browser validation is claimed.
+- SMS delivery investigation remains explicitly suspended. No SMS reliability or phone-provider launch acceptance is asserted.
+
+The two final vehicle findings above are fixed with observed targeted GREEN results. Remaining items are named acceptance gaps or conservative implementation limits, not silently waived requirements. Use the root's final verification ledger for the eventual combined-suite and local-runtime results.
+
+Root integration addendum
+- Final combined backend suite: 24 files, 293 tests passed; frontend/auth/payment utility suite: 9 passed. Both TypeScript checks passed. An earlier backend run was interrupted by Docker downtime and was discarded, then rerun completely.
+- Expo dependency compatibility check passed after compatible SDK57 patches. Web production export passed with one worker; Leaflet CSS asset warnings remain for visual review. Earlier parallel-worker export exhausted memory and is not counted as success.
+- Backend and worker images built successfully in sequence. Additive migration 20261007020000_platform_management applied to the local application database; no volumes or application history deleted.
+- Local /ready returned ready. Public app-config returned default version0. Anonymous management, admin config and vehicle-verification requests returned401. Backend/PostgreSQL/Redis/Minio reported healthy, worker running; frontend served HTTP200 on port8081.
+- Local restoration proof and dependency snapshots are recorded above. Authenticated API acceptance uses isolated fixtures; no completed visual/browser, native-device, real SMS or real-payment acceptance is claimed. All remaining production gates still apply.

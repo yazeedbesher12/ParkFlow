@@ -21,7 +21,7 @@ module.exports = () => {
 
   return {
     ...base.expo,
-    plugins: [...base.expo.plugins, 'expo-notifications'],
+    plugins: [...base.expo.plugins, 'expo-notifications', 'expo-image'],
     ...(process.env.EXPO_PUBLIC_EAS_PROJECT_ID ? {extra:{...base.expo.extra,eas:{projectId:process.env.EXPO_PUBLIC_EAS_PROJECT_ID}}}:{}),
     android: {
       ...base.expo.android,

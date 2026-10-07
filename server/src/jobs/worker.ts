@@ -11,6 +11,7 @@ import { recalculate } from '../modules/trust/service';
 import { notify } from '../modules/notifications/service';
 import { deliverPush } from '../providers/push';
 import { logger } from '../config/logger';
+import { expireInventoryHolds } from '../modules/reservations/service';
 // This Socket.IO instance publishes through Redis to API instances; it does not listen publicly.
 const sockets=attachSockets(createServer());
 export async function drainOutbox(){const events=await db.outboxEvent.findMany({where:{deliveredAt:null},orderBy:{createdAt:'asc'},take:200});for(const e of events){
@@ -18,9 +19,9 @@ export async function drainOutbox(){const events=await db.outboxEvent.findMany({
  if(e.topic==='notification.created')await pushQueue.add('deliver',{notificationId:(e.payload as {id:string}).id},{jobId:e.id});
  await db.outboxEvent.update({where:{id:e.id},data:{deliveredAt:new Date()}});
 }}
-async function maintenance(){await expireSessions();await verifyPoints();await processWebhooks();
+async function maintenance(){await expireSessions();await expireInventoryHolds();await verifyPoints();await processWebhooks();
  const pending=await db.payment.findMany({where:{status:'pending'},include:{method:true},take:50});for(const p of pending){try{await topup(p.method.userId,{amount:p.amount,paymentMethodId:p.paymentMethodId},p.idempotencyKey.slice(p.method.userId.length+1));}catch(e){logger.warn({paymentId:p.id},'Payment is not yet settled');}}
- const wallets=await db.wallet.findMany({where:{autoTopUpEnabled:true},take:500});for(const w of wallets){if(w.balance>=w.autoTopUpThreshold||!w.defaultPaymentMethodId)continue;try{await topup(w.userId,{amount:w.autoTopUpAmount,paymentMethodId:w.defaultPaymentMethodId},`auto-${w.id}-${w.updatedAt.getTime()}`);}catch{await atomic(tx=>notify(tx,w.userId,'payment_failed','Automatic top-up failed','??? ????? ????????','Check your payment method.','???? ?? ????? ?????.','/wallet',`auto-failed:${w.id}:${w.updatedAt.getTime()}`));}}
+ const wallets=await db.wallet.findMany({where:{autoTopUpEnabled:true},take:500});for(const w of wallets){if(w.balance>=w.autoTopUpThreshold||!w.defaultPaymentMethodId)continue;try{await topup(w.userId,{amount:w.autoTopUpAmount,paymentMethodId:w.defaultPaymentMethodId},`auto-${w.id}-${w.updatedAt.getTime()}`);}catch{await atomic(tx=>notify(tx,w.userId,'payment_failed','Automatic top-up failed','فشل الشحن التلقائي','Check your payment method.','تحقق من طريقة الدفع.','/wallet',`auto-failed:${w.id}:${w.updatedAt.getTime()}`));}}
  const expired=await db.permit.updateMany({where:{status:'active',validTo:{lt:new Date()}},data:{status:'expired'}});
  await db.violation.updateMany({where:{status:'unpaid',dueAt:{lt:new Date()}},data:{status:'overdue'}});
  const users=await db.user.findMany({take:500,orderBy:{updatedAt:'desc'},select:{id:true}});for(const u of users)await recalculate(u.id);

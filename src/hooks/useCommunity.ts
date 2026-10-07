@@ -3,22 +3,25 @@ import type { CheckpointStatus, GeoPoint, ReportedAvailability } from '@/types';
 import { services } from '@/services';
 import { queryKeys } from './queryKeys';
 import { useUserId } from './useSession';
+import { cachedRead } from '@/offline/storage';
 
 /** Road alerts, driver reports, routes and trust points — the features ported from Wusool. */
 
 export function useCheckpoints() {
+  const userId = useUserId();
   return useQuery({
     queryKey: queryKeys.checkpoints(),
-    queryFn: () => services.roads.listCheckpoints(),
+    queryFn: () => userId ? cachedRead(userId, 'checkpoints', () => services.roads.listCheckpoints()) : services.roads.listCheckpoints(),
     // Report weights decay with age, so statuses drift even with no new posts.
     refetchInterval: 60_000,
   });
 }
 
 export function useRoadFeed() {
+  const userId = useUserId();
   return useQuery({
     queryKey: queryKeys.roadFeed(),
-    queryFn: () => services.roads.feed(),
+    queryFn: () => userId ? cachedRead(userId, 'roadFeed', () => services.roads.feed()) : services.roads.feed(),
   });
 }
 
@@ -64,9 +67,13 @@ export function useRoute(
     maxAlternatives?: number;
   },
 ) {
+  const userId = useUserId();
+  const cacheKey = `route.${JSON.stringify({ from, to, options })}`;
   return useQuery({
     queryKey: queryKeys.route(from, to, options?.mode),
-    queryFn: () => services.routing.getRoute(from!, to!, options),
+    queryFn: () => userId
+      ? cachedRead(userId, cacheKey, () => services.routing.getRoute(from!, to!, options))
+      : services.routing.getRoute(from!, to!, options),
     enabled: Boolean(from && to),
     staleTime: 60_000,
     retry: false,

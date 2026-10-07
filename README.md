@@ -1,167 +1,194 @@
 # ParkFlow — Smart Parking for Palestine
 
-**ParkFlow** — a production-shaped React Native app for finding, paying for and
-managing parking in Palestine. Built with Expo + TypeScript, a real design system, and a typed
-service layer sitting in front of a mock backend so screens can be wired to real
-APIs without being rewritten.
+ParkFlow is an Expo and TypeScript application backed by Express, Prisma,
+PostgreSQL and Redis. It supports finding parking, reservations, parking sessions,
+wallet payments, community road reports, and workspaces for administrators and
+parking operators. The interface supports English and Arabic with RTL layouts.
 
-## Running it
+This is a development and pilot implementation. Payment delivery, SMS delivery,
+verified vehicle associations, and trustworthy occupancy data require configured
+providers or operator processes before public use.
 
-```bash
-npm install
+## What is included
+
+- Phone registration and passwordless sign-in with Palestinian `+970` numbers,
+  expiring verification challenges, attempt limits and resend limits. Provider
+  adapters remain available while phone sign-in is temporarily paused for team
+  development.
+- Optional development email sign-in without a password or code. Existing
+  accounts retain their roles; registration creates ordinary users. These
+  sessions are rejected when the mode is disabled, and production refuses to
+  start with development authentication enabled.
+- Administrative user and company management, vehicle verification review,
+  parking review and publication, and audited role and status changes.
+- Operator membership and access controls, parking prices, location, entrances,
+  capacity, weekly hours, closures, availability, check-in and analytics.
+- Application appearance configuration with preview, publication, version
+  history and rollback for supported content, colours and branding.
+- Explicit demo and live inventory, reservation quotes calculated by the server,
+  availability freshness checks, cancellation and recovery flows, tariff
+  snapshots, and idempotent wallet operations.
+- Current location, parking layouts and forecasts, navigation, offline queues
+  for road reports and feedback, and Arabic and English translations.
+
+## Local setup
+
+Requirements: Node.js, npm, and Docker Desktop with its Linux engine running.
+
+1. Install the frontend dependencies with `npm ci`.
+2. Copy `.env.example` to `.env` and `server/.env.example` to `server/.env`.
+   For a browser on this computer, set the frontend
+   `EXPO_PUBLIC_API_BASE_URL=http://localhost:4000/api/v1`. For a physical device,
+   use the computer's LAN IP instead of `localhost`.
+3. In `server/.env`, generate private values for the JWT secrets and payment
+   webhook secret. Set `PROFILE_ENCRYPTION_KEY` to a private 32-byte key encoded
+   as 64 hexadecimal characters for national ID encryption. Keep this key and
+   database backups secure. Example local database and storage credentials are
+   intended for development only.
+4. Start the backend services from `server`:
+
+   ```powershell
+   docker compose up -d --build
+   docker compose exec backend npm run db:seed
+   ```
+
+   On a fresh development database, set `SEED_ADMIN_EMAIL=admin@parkflow.local`
+   before seeding if an administrator is needed. The seed does not promote an
+   existing user. Owners and staff are assigned through the administrator's
+   management workspace.
+5. Start the frontend from the project root:
+
+   ```powershell
+   npx expo start --web --port 8081 --localhost --max-workers 1
+   ```
+
+   Open `http://localhost:8081`. For native development, use `npx expo start`
+   and select a connected device or emulator.
+
+## Temporary team sign-in
+
+The committed example configuration keeps authentication shortcuts disabled.
+To use email while developing in a trusted environment, explicitly set these
+values in the private `server/.env`:
+
+```dotenv
+NODE_ENV=development
+DEV_SKIP_EMAIL_OTP=true
+DEV_SKIP_PHONE_OTP=false
 ```
 
-```bash
-npx expo start
-```
+Then run `docker compose up -d --force-recreate backend worker` from `server`.
+Choose sign-in on the welcome screen or open `/email`, and enter an existing
+account's email. New users enter their name and email before completing their
+profile. This mode grants access based on knowing an email address, so limit the
+development instance to the trusted team. It does not mark new emails as verified.
 
-Then press `a` for Android, `i` for iOS, or `w` for the browser. Maps render
-through `react-native-maps` on device; the browser gets an equivalent projected
-surface (see *Platform notes*).
+Set both shortcut flags to `false` and recreate the backend and worker to restore
+phone verification. Configure an SMS provider separately; existing provider code
+and verification limits are retained. Development email sessions stop working
+after restoration. A new development account without a phone needs a verified
+phone and an appropriate account-linking process before real use.
 
-Typecheck:
+See [phone authentication and restoration instructions](PHONE_AUTH.md), including
+Arabic instructions, and [SMTP email verification setup](EMAIL_OTP.md).
 
-```bash
+## Local ports
+
+| Service | Host port | Container port |
+| --- | --- | --- |
+| Expo web | 8081 | — |
+| Backend API | 4000 | 4000 |
+| PostgreSQL | 5434 | 5432 |
+| Redis | 6381 | 6379 |
+| Object storage API | 9002 | 9000 |
+| Object storage console | 9003 | 9001 |
+
+The worker does not expose a port. PostgreSQL, Redis and object storage are bound
+to the host loopback address. The API is under `/api/v1`; `/ready` checks service
+readiness. Administrative pages include `/admin`, `/admin/manage`,
+`/admin/vehicles` and `/admin/appearance`; the operator workspace is `/operator`.
+Access is enforced by the backend, not only by hiding pages.
+
+## Verification
+
+Frontend checks, from the project root:
+
+```powershell
 npm run typecheck
+node --test --test-concurrency=1 tests/*.test.cjs
 ```
 
-### Email sign-in
+Backend checks, from `server`:
 
-Follow [Email OTP setup](EMAIL_OTP.md) to configure Gmail SMTP and the backend.
-Enter your email, request a six-digit code, and use the code received in your inbox.
-New accounts continue to name and vehicle setup. There is no demo login or on-screen code.
+```powershell
+npm ci
+npm run typecheck
+node scripts/migrate-test.cjs
+npm test
+```
+
+Start PostgreSQL and Redis before running backend tests. `TEST_DATABASE_URL` must
+point to a dedicated database whose name ends in `_test`. Create it once if
+needed, for example with
+`docker compose exec postgres createdb -U parkflow parkflow_test`.
+The suite uses Redis database 15, disables SMS delivery, and disables development
+authentication by default; authentication tests enable their modes explicitly.
+Do not use the application database as the test database.
 
 ## Architecture
 
-```
-app/                    expo-router routes only — thin screens
-  (onboarding)/         welcome → phone → otp → name → first vehicle
-  (tabs)/               map · activity · vehicles · wallet · profile
-  parking/              start · active/[id] · receipt/[id]
-  vehicles/ wallet/ activity/ violations/ profile/
-src/
-  components/ui/        design-system primitives (AppButton, BottomSheet, …)
-  components/domain/    parking-aware components (ZoneSheet, PlateBadge, …)
-  components/map/       platform-split map surface
-  services/             typed service interfaces + mock implementations
-  hooks/                TanStack Query hooks, one per domain
-  store/                zustand: auth (SecureStore) and preferences (AsyncStorage)
-  types/                domain model
-  theme/                colour, spacing, radius, typography, shadow, motion tokens
-  utils/                pricing, money, time, plate, geo, errors
-  i18n/                 en (source of truth) + ar overlay
-```
-
-**Screens never touch data directly.** They call hooks, hooks call
-`services.*`, and `src/services/index.ts` is the single place where the mock
-implementations are swapped for HTTP.
-
-## Business rules worth knowing
-
-These live in the service layer, not the UI, because that is where they belong
-when a real backend arrives.
-
-- **One active session per _vehicle_, never per account.** Two cars on the same
-  account can be parked simultaneously; the same car cannot be parked twice. The
-  start screen surfaces the conflict and offers the running session.
-- **Cost is derived from timestamps.** `computeSessionBreakdown(session, now)` is
-  a pure function of `startedAt` and the frozen rate. The one-second interval on
-  the active screen only triggers a re-render — it is never the source of truth,
-  which is why killing the app and reopening it recovers the exact value.
-- **The tariff is snapshotted at start.** A price change mid-session cannot
-  re-price a session already running.
-- **Payment failure never destroys parking data.** If the wallet cannot cover a
-  finished session, the session still closes and is marked `PAYMENT_FAILED`, with
-  the debt tracked separately and settleable from the receipt.
-- **Cards are charged only on top-up.** Parking and violations settle against the
-  wallet balance — never a per-minute card charge.
-- **Removing a vehicle unlinks it.** Sessions and violations keep pointing at the
-  vehicle, so history and enforcement records survive.
-- **Violations belong to a plate**, not to a user. They surface to whoever has
-  that vehicle linked, which is why they appear immediately after onboarding.
-- **Double taps are absorbed** via idempotency keys on start-parking, top-up and
-  violation payment.
-
-## Interface notes
-
-- **The timer ring** on the active-parking screen is not decoration: it fills
-  against the prepaid time bought, or against the zone's maximum stay. A zone
-  with neither has no honest denominator, so the arc stays empty rather than
-  inventing progress.
-- **Availability** is shown as a badge *and* a three-segment meter, so it never
-  depends on colour alone.
-- **The receipt** is notched and perforated so it reads as a ticket rather than
-  a panel.
-- **Onboarding steps after the account exists** (name, first vehicle) swallow the
-  Android back button — reversing into the email or OTP screen of an
-  already-verified account is a dead end. "Skip for now" is the way out.
-
-## Localisation and RTL
-
-English is the source of truth (`src/i18n/en.ts`); Arabic is an overlay that
-falls back per key, so a missing translation never renders a raw key. Layout
-direction is driven from React state (`useLocale().row` / `textAlign` / `dir`)
-rather than `I18nManager.forceRTL`, so switching to Arabic mirrors the UI
-immediately with no app restart.
-
-## Running on Android
-
-```bash
-npx expo start --android
+```text
+app/                    Expo Router screens and workspaces
+src/components/         UI, map, management and domain components
+src/hooks/              TanStack Query hooks
+src/services/http/      Typed backend adapters
+src/store/              Authentication, preferences and application configuration
+src/offline/            Queued road reports and feedback
+src/theme/              Design tokens and configured appearance
+src/i18n/               English and Arabic strings
+server/src/modules/     Authentication and parking business rules
+server/src/jobs/        Background workers
+server/prisma/          Schema, migrations and seed
+server/tests/           Backend and integration checks
+tests/                  Frontend regression checks
+docs/operations/        Setup and operating guidance
+docs/reviews/           Implementation and verification records
 ```
 
-This opens the app in Expo Go on a connected device or emulator. **Every screen
-works there except the map tiles**: Android's Google Maps SDK will not draw tiles
-without an authorised API key, and Expo Go's built-in key is not valid for
-third-party projects. The map mounts and logs `Authorization failure`.
+Screens use hooks and typed services. `src/services/index.ts` selects the HTTP
+implementations for application data; legacy prototype helpers remain in the
+source. PostgreSQL owns account, parking and financial records. Redis supports
+verification limits, jobs and coordination. Signed evidence URLs use object storage.
 
-To get real tiles, supply your own key and make a development build:
+## Parking and payment rules
 
-1. Create a key in the [Google Cloud console](https://console.cloud.google.com/)
-   with **Maps SDK for Android** enabled.
-2. Pass it through the environment — `app.config.js` reads it, so it is never
-   committed:
-
-```bash
-GOOGLE_MAPS_API_KEY=AIza... npx expo run:android
-```
-
-iOS needs no key; react-native-maps uses Apple Maps there.
+- A vehicle can have only one active session, while an account can park multiple
+  vehicles. Session cost comes from server timestamps and the tariff captured
+  when parking starts.
+- Insufficient wallet funds do not erase a finished parking session. Its payment
+  failure can be settled later. Top-up and payment requests use idempotency keys;
+  an uncertain result retains its key for recovery.
+- Unlinking a vehicle preserves its parking history. Adding a plate alone does
+  not establish a verified association or expose protected violations, evidence
+  or permits.
+- Seeded zones use demo inventory and make no live availability guarantee. Live
+  manual inventory requires positive capacity and a fresh operator snapshot.
+  A live hold lasts up to 15 minutes; confirmed reservation records remain
+  authoritative until cancellation or completion.
+- Reservations and payment mutations require a connection. Road reports and
+  parking feedback can queue offline with stable idempotency keys.
 
 ## Platform notes
 
-- **Maps.** `MapSurface.native.tsx` renders `react-native-maps`;
-  `MapSurface.tsx` is the default/web implementation that projects the same
-  coordinates onto a stylised surface, so the app is fully previewable in a
-  browser. Both satisfy one interface (`components/map/types.ts`).
-- **Motion.** Entrance animations collapse to their final state when the user
-  has reduced motion enabled, or when no animation frames are available. Content
-  visibility never depends on an animation actually running.
-- **Storage.** Tokens go to SecureStore on device (AsyncStorage on web, which has
-  no secure store); preferences and the mock database use AsyncStorage.
+Native maps use `react-native-maps`; the web implementation projects the same
+coordinates onto a styled surface. Android Google Maps tiles require a configured
+Maps SDK key and an appropriate development build. `app.config.js` reads
+`GOOGLE_MAPS_API_KEY` from the environment. iOS uses Apple Maps.
 
-## What is mocked
+Device tokens use SecureStore. Web storage does not provide the same protection
+as a device secure store. Arabic layout direction is driven by React state, so
+language changes do not require an application restart.
 
-Everything behind `src/services/` is an in-memory database persisted to
-AsyncStorage. It models a server faithfully — it owns the rules above, returns
-realistic latency, and fails the way a server fails — but it is not one.
-
-- **Evidence photos** are drawn, not photographed. Real captures come from the
-  issuing authority's ANPR systems; rather than ship broken image slots or stock
-  photos that could be mistaken for genuine evidence, each frame is rendered as a
-  clearly synthetic scene labelled `SAMPLE CAPTURE`, keeping the real screen's
-  layout, overlays and metadata.
-- **Payments** go through `PaymentService`, which never sees card data — only a
-  stored payment-method id, the same boundary the real integration keeps. A card
-  added ending `0000` always declines, so the failure path is demonstrable on
-  demand rather than at random.
-- **Availability** is coarse (`available` / `limited` / `full` / `unknown`). No
-  exact free-space counts are claimed without a trustworthy occupancy source.
-
-## Built to extend
-
-The data model already carries the concepts the wider platform needs, so these
-are additions rather than rewrites: `ParkingFacility` + `hasAnpr`/`hasBarrier`
-for garages that open a session on plate read; `ParkingEntryMethod` so QR and
-manual zone codes are peers of GPS rather than afterthoughts; `Permit` and
-`UserVehicle` roles for resident permits and shared or company vehicles.
+Private `.env` files, database backups, runtime artifacts, assistant sessions and
+provider support diagnostics are excluded from Git. Copy the example environment
+files and supply private values locally instead of committing credentials.

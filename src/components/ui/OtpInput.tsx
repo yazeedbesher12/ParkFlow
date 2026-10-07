@@ -12,6 +12,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import { duration } from '@/theme/motion';
+import { asciiDigits } from '@/utils/authFlow';
 
 export interface OtpInputProps {
   value: string;
@@ -62,7 +63,7 @@ export function OtpInput({
   const shakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }] }));
 
   const handleChange = (next: string) => {
-    const digits = next.replace(/\D/g, '').slice(0, length);
+    const digits = asciiDigits(next).replace(/\D/g, '').slice(0, length);
     onChangeText(digits);
   };
 

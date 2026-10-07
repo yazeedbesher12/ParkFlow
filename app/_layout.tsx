@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -18,6 +18,9 @@ import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
 import { useAuthStore } from '@/store/authStore';
 import { useBackendSync } from '@/hooks/useBackendSync';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { usePhoneAuthStore } from '@/store/phoneAuthStore';
+import { useAppConfigStore } from '@/store/appConfigStore';
+import { authLanding } from '@/utils/authFlow';
 import { isAppError } from '@/utils/errors';
 import { WebAppShell } from '@/components/layout/WebAppShell';
 
@@ -39,30 +42,31 @@ const queryClient = new QueryClient({
 /**
  * Keeps the visible route in step with auth state.
  *
- * Signing in is not the same as finishing setup: a new account still has the
- * name and first-vehicle steps to go. The gate therefore only ejects a user
- * from onboarding once `onboardingComplete` is set, so those steps are not
- * skipped the moment a token exists.
+ * Server profile completion belongs to the account. Device preferences cannot
+ * skip a new account's details, and the optional vehicle step stays in memory.
  */
 function useAuthGate(ready: boolean) {
   const router = useRouter();
-  const segments = useSegments();
+  const segments = useSegments() as string[];
   const user = useAuthStore((s) => s.user);
   const authHydrated = useAuthStore((s) => s.hydrated);
-  const onboardingComplete = usePreferencesStore((s) => s.onboardingComplete);
+  const vehicleSetupUserId = usePhoneAuthStore((s) => s.vehicleSetupUserId);
 
   useEffect(() => {
     if (!ready || !authHydrated) return;
 
     const inOnboarding = segments[0] === '(onboarding)';
-    const signedIn = Boolean(user?.id && user.fullName);
+    const signedIn = Boolean(user?.id);
+    const destination = authLanding(user);
 
-    if (!signedIn && !inOnboarding) {
+    if (!signedIn && (!inOnboarding || segments[1] === 'details' || segments[1] === 'vehicle')) {
       router.replace('/(onboarding)/welcome');
-    } else if (signedIn && onboardingComplete && inOnboarding) {
-      router.replace('/(tabs)/map');
+    } else if (signedIn && destination === '/(onboarding)/details') {
+      if (!inOnboarding || segments[1] !== 'details') router.replace(destination);
+    } else if (signedIn && inOnboarding && vehicleSetupUserId !== user?.id) {
+      router.replace(destination);
     }
-  }, [ready, authHydrated, user, onboardingComplete, segments, router]);
+  }, [ready, authHydrated, user, vehicleSetupUserId, segments, router]);
 }
 
 function RootNavigator() {
@@ -85,6 +89,8 @@ function RootNavigator() {
       <Stack.Screen name="activity" />
       <Stack.Screen name="violations" />
       <Stack.Screen name="profile" />
+      <Stack.Screen name="operator" />
+      <Stack.Screen name="admin" />
       <Stack.Screen name="notifications" options={{ animation: 'slide_from_bottom' }} />
       <Stack.Screen name="+not-found" />
     </Stack>
@@ -93,6 +99,14 @@ function RootNavigator() {
 
 function AppShell() {
   useBackendSync();
+  // Public appearance loads independently of authentication and never blocks boot.
+  useEffect(() => {
+    const refresh = () => { void useAppConfigStore.getState().refresh(); };
+    refresh();
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') refresh(); });
+    const timer = setInterval(refresh, 5 * 60 * 1000);
+    return () => { subscription.remove(); clearInterval(timer); };
+  }, []);
   const { colors } = useTheme();
   const [fontsLoaded, fontError] = useFonts({
     PlusJakartaSans_400Regular,

@@ -71,6 +71,11 @@ export const useAuthStore = create<AuthState>()((set) => ({
   },
 
   signOut: async () => {
+    const previousUserId = useAuthStore.getState().user?.id;
+    if (previousUserId) {
+      const { retryQueue } = await import('@/offline/retryQueue');
+      await retryQueue.clearUser(previousUserId);
+    }
     await secureStorage.removeItem(STORAGE_KEYS.authSession);
     set({ session: undefined, user: undefined });
   },

@@ -28,7 +28,14 @@ export interface ParkingReservation {
   estimatedTotalPriceSnapshot: number;
   currency: Currency;
   priceIsDemo: boolean;
-  isDemoReservation: true;
+  /** Explicit inventory source retained alongside the legacy demo flag. */
+  isDemoReservation: boolean;
+  inventoryMode?: 'demo' | 'live';
+  guarantee?: 'none' | 'operator_backed';
+  holdExpiresAt?: ISODateString;
+  checkedInAt?: ISODateString | null;
+  operatorResolution?: 'none' | 'alternative' | 'refund_requested';
+  operatorResolutionNote?: string | null;
   status: ParkingReservationStatus;
   publicCode: string;
   qrValue: string;
@@ -37,11 +44,34 @@ export interface ParkingReservation {
   updatedAt: ISODateString;
 }
 
-export interface CreateParkingReservationInput {
+export interface ParkingReservationSelection {
   zoneId: ID;
-  spotId: ID;
   startTime: ISODateString;
   durationMinutes: number;
+}
+
+export interface ReservationQuoteConfirmation extends ParkingReservationSelection {
+  zoneVersion: number;
+  tariffId: ID;
+  totalMinor: number;
+  currency: Currency;
+}
+
+export interface ParkingReservationQuote extends ReservationQuoteConfirmation {
+  endTime: ISODateString;
+  tariffName: string;
+  hourlyRate: number;
+  minimumCharge: number;
+  dailyCap: number | null;
+  freeMinutes: number;
+  incrementMinutes: number;
+  maxStayMinutes: number | null;
+  confirmation: ReservationQuoteConfirmation;
+}
+
+export interface CreateParkingReservationInput extends ParkingReservationSelection {
+  spotId: ID;
+  quote: ReservationQuoteConfirmation;
 }
 
 export interface QrValidationResult {

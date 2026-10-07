@@ -34,7 +34,7 @@ export interface ParkingLayout {
   parkingNameAr: string;
   template: ParkingLayoutTemplate;
   dimensions: { width: number; height: number };
-  section: { name: string; nameAr: string; spaceCount: 40 };
+  section: { name: string; nameAr: string; spaceCount: number };
   entrance: { x: number; y: number; label: string };
   exit: { x: number; y: number; label: string };
   lanes: ParkingLayoutLane[];
@@ -44,6 +44,7 @@ export interface ParkingLayout {
     statuses: Array<{ id: ParkingSpotState; label: string; labelAr: string; color: string }>;
     types: Array<{ id: Exclude<ParkingSpotType, 'regular'>; label: string; labelAr: string; marker: string }>;
   };
-  isDemo: true;
+  isDemo: boolean;
+  inventoryMode?: 'demo' | 'live';
   lastUpdated: ISODateString;
 }

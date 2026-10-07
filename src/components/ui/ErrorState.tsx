@@ -22,6 +22,7 @@ export function ErrorState({ error, title, onRetry, compact = false, style }: Er
 
   const appError = toAppError(error);
   const isOffline = appError.code === 'network';
+  const isRateLimited = appError.details?.status === 429 || appError.details?.serverCode === 'RATE_LIMITED';
   const Icon = isOffline ? CloudOff : TriangleAlert;
 
   return (
@@ -51,11 +52,11 @@ export function ErrorState({ error, title, onRetry, compact = false, style }: Er
       </View>
 
       <AppText variant="h3" align="center">
-        {title ?? (isOffline ? t('common.offline') : t('error.title'))}
+        {title ?? (isRateLimited ? t('error.rateLimitTitle') : isOffline ? t('common.offline') : t('error.title'))}
       </AppText>
 
       <AppText variant="body" color="textSecondary" align="center" style={{ maxWidth: 320 }}>
-        {error ? errorMessage(error) : t('error.generic')}
+        {isRateLimited ? t('error.rateLimitBody') : error ? errorMessage(error) : t('error.generic')}
       </AppText>
 
       {onRetry ? (

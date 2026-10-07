@@ -19,10 +19,12 @@ import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
 import { useReportZone } from '@/hooks/useCommunity';
+import { useSubmitParkingFeedback } from '@/hooks/useParking';
 import type { ParkingZone, ReportedAvailability } from '@/types';
 import { formatRate } from '@/utils/money';
 import { formatClockRange, formatDurationShort, isWithinOperatingHours } from '@/utils/time';
 import { formatDistance } from '@/utils/geo';
+import { ZoneForecast } from './ZoneForecast';
 
 export interface ZoneSheetProps {
   zone?: ParkingZone;
@@ -34,6 +36,7 @@ export interface ZoneSheetProps {
   onStartParking: (zone: ParkingZone) => void;
   onReserve: (zone: ParkingZone) => void;
   onViewParkingMap: (zone: ParkingZone) => void;
+  onSaveReturn?: (zone: ParkingZone) => void;
   /** Disables the CTA when the zone cannot be parked in right now. */
   startDisabled?: boolean;
 }
@@ -80,17 +83,22 @@ export function ZoneSheet({
   onStartParking,
   onReserve,
   onViewParkingMap,
+  onSaveReturn,
   startDisabled = false,
 }: ZoneSheetProps) {
   const { colors } = useTheme();
   const { t, row, dateLocale, locale } = useLocale();
   const reportZone = useReportZone();
+  const feedback = useSubmitParkingFeedback();
   const [thanks, setThanks] = useState<'points' | 'counted' | undefined>();
+  const [feedbackThanks, setFeedbackThanks] = useState(false);
 
   // Each zone starts with a fresh report prompt.
   useEffect(() => {
     setThanks(undefined);
+    setFeedbackThanks(false);
     reportZone.reset();
+    feedback.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zone?.id]);
 
@@ -103,6 +111,8 @@ export function ZoneSheet({
   const isGarage = zone.kind === 'garage' || zone.kind === 'private';
   const name = locale === 'ar' ? zone.nameAr : zone.name;
   const city = locale === 'ar' ? zone.cityAr : zone.city;
+  const inventoryMode = zone.inventoryMode ?? (zone.prototypeData ? 'demo' : 'live');
+  const isLiveInventory = inventoryMode === 'live';
 
   const availabilityLabel = t(`zone.${zone.availability}` as const);
   const ownershipLabel = zone.ownership
@@ -110,11 +120,26 @@ export function ZoneSheet({
     : undefined;
   const restriction =
     locale === 'ar' ? zone.accessRestrictionAr ?? zone.accessRestriction : zone.accessRestriction;
+  const provenance = zone.availabilityProvenance ?? zone.provenance;
+  const operatorBacked = isLiveInventory && !zone.prototypeData && provenance?.source === 'operator' && provenance.freshness === 'fresh';
+  const freshness = provenance?.freshness ?? 'unknown';
+  const source = provenance?.source ?? 'unknown';
+  const provenanceDetail = t('zone.provenanceDetail', {
+    source: t(`zone.source.${source}` as never),
+    freshness: t(`zone.freshness.${freshness}` as never),
+    confidence: provenance ? `${Math.round(provenance.confidence * 100)}%` : '—',
+  });
 
   const sendReport = (availability: ReportedAvailability) =>
     reportZone.mutate(
       { zoneId: zone.id, availability },
       { onSuccess: (result) => setThanks(result.points ? 'points' : 'counted') },
+    );
+
+  const sendFeedback = (outcome: 'found' | 'not_found' | 'delayed') =>
+    feedback.mutate(
+      { zoneId: zone.id, outcome, ...(outcome === 'delayed' ? { delayBucket: '5_15m' as const } : {}) },
+      { onSuccess: () => setFeedbackThanks(true) },
     );
 
   return (
@@ -157,11 +182,28 @@ export function ZoneSheet({
           ) : (
             <StatusBadge label={t('zone.closedNow')} tone="info" showDot={false} />
           )}
+          <StatusBadge
+            label={isLiveInventory ? t('reservation.inventoryLive') : t('reservation.inventoryDemo')}
+            tone={isLiveInventory ? 'success' : 'warning'}
+            showDot={false}
+          />
           {distanceMeters != null ? (
             <AppText variant="bodySm" color="textTertiary">
               {formatDistance(distanceMeters)} {t('common.away')}
             </AppText>
           ) : null}
+        </View>
+
+        <View
+          accessible
+          accessibilityRole="text"
+          accessibilityLabel={provenanceDetail}
+          style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}
+        >
+          <Info size={14} color={colors.textTertiary} strokeWidth={2.2} />
+          <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>
+            {provenanceDetail}
+          </AppText>
         </View>
 
         {zone.crowd ? (
@@ -176,6 +218,51 @@ export function ZoneSheet({
             </AppText>
           </View>
         ) : null}
+
+        <View style={{ gap: spacing.sm }}>
+          <AppText variant="label" color="textSecondary">
+            {t('zone.feedbackPrompt')}
+          </AppText>
+          <View style={{ flexDirection: row, gap: spacing.sm }}>
+            <AppButton
+              label={t('zone.feedback.found')}
+              variant="secondary"
+              size="sm"
+              style={{ flex: 1 }}
+              loading={feedback.isPending && feedback.variables?.outcome === 'found'}
+              disabled={feedback.isPending}
+              onPress={() => sendFeedback('found')}
+            />
+            <AppButton
+              label={t('zone.feedback.notFound')}
+              variant="secondary"
+              size="sm"
+              style={{ flex: 1 }}
+              loading={feedback.isPending && feedback.variables?.outcome === 'not_found'}
+              disabled={feedback.isPending}
+              onPress={() => sendFeedback('not_found')}
+            />
+            <AppButton
+              label={t('zone.feedback.delayed')}
+              variant="secondary"
+              size="sm"
+              style={{ flex: 1 }}
+              loading={feedback.isPending && feedback.variables?.outcome === 'delayed'}
+              disabled={feedback.isPending}
+              onPress={() => sendFeedback('delayed')}
+            />
+          </View>
+          {feedbackThanks ? (
+            <AppText variant="caption" color="successText">
+              {t('zone.feedbackThanks')}
+            </AppText>
+          ) : null}
+          {feedback.isError ? (
+            <AppText variant="caption" color="warningText">
+              {t('zone.feedbackFailed')}
+            </AppText>
+          ) : null}
+        </View>
 
         {restriction ? (
           <View
@@ -203,6 +290,18 @@ export function ZoneSheet({
             </AppText>
           </View>
         ) : null}
+
+        {provenance?.isGuaranteed === false || !provenance ? (
+          <AppText variant="caption" color="textTertiary">
+            {zone.prototypeData ? t('zone.demoAvailability') : t('zone.notGuaranteed')}
+          </AppText>
+        ) : null}
+        <AppText variant="caption" color={operatorBacked ? 'successText' : 'textTertiary'}>
+          {operatorBacked
+            ? t('reservation.guaranteeOperator')
+            : t('reservation.guaranteeNone')}
+        </AppText>
+        <ZoneForecast zoneId={zone.id} />
 
         {/* Two tiles, not three: an hours range never fits a third of the width
             and was being truncated, so it gets its own full-width row below. */}
@@ -289,6 +388,7 @@ export function ZoneSheet({
           onPress={() => onViewParkingMap(zone)}
           testID="zone-view-parking-map"
         />
+        {onSaveReturn ? <AppButton label={t('returnToCar.save')} variant="secondary" onPress={() => onSaveReturn(zone)} /> : null}
 
         <AppButton
           label={t('reservation.reserveSpot')}

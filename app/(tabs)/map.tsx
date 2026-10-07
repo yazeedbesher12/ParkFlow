@@ -15,6 +15,7 @@ import { TestLocationControl } from '@/components/map/TestLocationControl';
 import { VehicleSelectorSheet } from '@/components/domain/VehicleSelectorSheet';
 import { ZoneSheet } from '@/components/domain/ZoneSheet';
 import { ActiveSessionBanner } from '@/components/domain/ActiveSessionBanner';
+import { OfflineStaleNotice } from '@/components/ui/OfflineStaleNotice';
 import { ZoneCodeSheet } from '@/components/domain/ZoneCodeSheet';
 import { RoadReportLocationPanel } from '@/components/map/RoadReportLocationPanel';
 import { RoadReportCreationSheet, type ReportCreationStep } from '@/components/map/RoadReportCreationSheet';
@@ -673,6 +674,7 @@ export default function MapScreen() {
           paddingHorizontal: spacing.md,
         }}
       >
+        {!reportLocationPicking && !reportStep && !selectedReport ? <OfflineStaleNotice cacheKey="zones.all" /> : null}
         {!reportLocationPicking && !reportStep && !selectedReport && bannerSession ? (
           <ActiveSessionBanner
             session={bannerSession}
@@ -771,6 +773,11 @@ export default function MapScreen() {
         onStartParking={startParking}
         onReserve={reserveParking}
         onViewParkingMap={viewParkingMap}
+        onSaveReturn={(zone) => {
+          useReservationRouteStore.getState().saveReturnToCar({ zoneId: zone.id, facilityId: zone.facilityId, savedLocation: zone.location });
+          setSelectedZoneId(undefined);
+          router.push('/parking/return');
+        }}
         startDisabled={selectedZone?.parkingAllowed === false}
       />
 

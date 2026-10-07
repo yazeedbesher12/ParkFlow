@@ -17,8 +17,8 @@ export async function transactions(userId:string,types?:string[],limit=100){cons
 export async function transaction(userId:string,id:string){const t=requireValue(await db.walletTransaction.findFirst({where:{id,wallet:{userId}}}));return {...t,userId,currency:'ILS'};}
 export async function confirmPayment(id:string,result:PaymentResult){return atomic(async tx=>{await lock(tx,`payment:${id}`);const p=requireValue(await tx.payment.findUnique({where:{id},include:{method:true}}));assert(result.amount===p.amount&&result.currency===p.currency,'PAYMENT_MISMATCH','Payment amount mismatch',409);
  if(p.ledgerId)return; if(result.status==='pending')return;
- const ledger=await post(tx,p.method.userId,{amount:p.amount,type:'topup',status:result.status,title:'Wallet Top-up',titleAr:'??? ???????',paymentMethodId:p.paymentMethodId});await tx.payment.update({where:{id},data:{status:result.status,ledgerId:ledger.id}});
- if(result.status==='completed')await notify(tx,p.method.userId,'topup_success','Wallet topped up','?? ??? ???????','Your payment has been confirmed.','?? ????? ?????.','/wallet',`topup:${p.id}`);
+ const ledger=await post(tx,p.method.userId,{amount:p.amount,type:'topup',status:result.status,title:'Wallet Top-up',titleAr:'شحن المحفظة',paymentMethodId:p.paymentMethodId});await tx.payment.update({where:{id},data:{status:result.status,ledgerId:ledger.id}});
+ if(result.status==='completed')await notify(tx,p.method.userId,'topup_success','Wallet topped up','تم شحن المحفظة','Your payment has been confirmed.','تم تأكيد دفعتك.','/wallet',`topup:${p.id}`);
  });}
 export async function topup(userId:string,input:{amount:number;paymentMethodId:string},key:string){
  const p=await idempotent(userId,'topup',key,input,async tx=>{requireValue(await tx.paymentMethod.findFirst({where:{id:input.paymentMethodId,userId,deletedAt:null}}));return tx.payment.create({data:{...input,provider:env.PAYMENT_PROVIDER,idempotencyKey:`${userId}:${key}`}});});

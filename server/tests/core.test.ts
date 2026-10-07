@@ -41,6 +41,8 @@ beforeEach(async()=>{
  await db.parkingZone.create({data:{id:'test-zone',operatorId:'op',code:'TEST-001',name:'Test parking',nameAr:'???? ??????',city:'Ramallah',cityAr:'??? ????',latitude:31.9,longitude:35.2,kind:'garage',defaultMode:'start_stop',supportedModes:['start_stop','prepaid'],supportedEntryMethods:['manual','qr','zone_code','gps'],tariffs:{create:{id:'rate',name:'Test',hourlyRate:600,incrementMinutes:15,freeMinutes:5,minimumCharge:100,maxStayMinutes:180,validFrom:new Date('2020-01-01')}},operatingHours:{create:Array.from({length:7},(_,weekday)=>({weekday,opensAt:'00:00',closesAt:'00:00'}))}}});
  await db.roadCheckpoint.create({data:{id:'cp',nameEn:'Test checkpoint',nameAr:'???? ??????',latitude:31.9,longitude:35.2}});
  driver=await login('599111111');other=await login('599222222');vehicleId=(await vehicles.create(driver.user.id,{plateNumber:'1234567',type:'private'})).id;
+ // This fixture represents an explicitly reviewed association; self-added plates remain unverified.
+ await db.userVehicle.update({where:{userId_vehicleId:{userId:driver.user.id,vehicleId}},data:{role:'owner',verifiedAt:new Date()}});
 });
 describe('authentication and authorization',()=>{
  it('keeps development login disabled unless both development guards are enabled',async()=>{
@@ -50,9 +52,9 @@ describe('authentication and authorization',()=>{
    env.NODE_ENV='development';env.DEV_SKIP_EMAIL_OTP=true;
    const first=await request(app).post('/api/v1/auth/dev-login').send({email:' Dev@Example.COM '});
    expect(first.status).toBe(200);expect(first.body).toMatchObject({user:{email:'dev@example.com'},isNewUser:true});
-   expect(first.body.user.emailVerifiedAt).toBeTruthy();
+   expect(first.body.user.emailVerifiedAt).toBeNull();
    expect(await db.wallet.count({where:{userId:first.body.user.id}})).toBe(1);
-   await db.user.update({where:{id:first.body.user.id},data:{fullName:'Dev User'}});
+   await db.user.update({where:{id:first.body.user.id},data:{fullName:'Dev User',profileCompletedAt:new Date()}});
    const again=await request(app).post('/api/v1/auth/dev-login').send({email:'dev@example.com'});
    expect(again.status).toBe(200);expect(again.body).toMatchObject({user:{id:first.body.user.id},isNewUser:false});
    await expect(auth.authenticate(again.body.session.accessToken)).resolves.toMatchObject({userId:first.body.user.id});
@@ -92,9 +94,17 @@ describe('authentication and authorization',()=>{
  it('rotates refresh tokens and revokes the family on replay',async()=>{const next=await auth.refresh(driver.session.refreshToken,{});expect(next.refreshToken).not.toBe(driver.session.refreshToken);await expect(auth.authenticate(next.accessToken)).resolves.toMatchObject({userId:driver.user.id});await expect(auth.refresh(driver.session.refreshToken,{})).rejects.toMatchObject({status:401});await expect(auth.refresh(next.refreshToken,{})).rejects.toMatchObject({status:401});expect(await db.refreshToken.findFirst({where:{tokenHash:driver.session.refreshToken}})).toBeNull();});
  it('requires JWT and blocks non-admin access',async()=>{expect((await request(app).get('/api/v1/wallet')).status).toBe(401);expect((await request(app).get('/api/v1/admin/users').auth(driver.session.accessToken,{type:'bearer'})).status).toBe(403);});
  it('invalidates logout sessions immediately',async()=>{const a=await auth.authenticate(driver.session.accessToken);await auth.logout(a.userId,a.sid);await expect(auth.authenticate(driver.session.accessToken)).rejects.toMatchObject({status:401});});
- it('rejects a foreign vehicle and prevents plate self-linking',async()=>{await expect(vehicles.get(other.user.id,vehicleId)).rejects.toMatchObject({status:404});await expect(vehicles.create(other.user.id,{plateNumber:'1234567',type:'private'})).rejects.toMatchObject({code:'OWNERSHIP_VERIFICATION_REQUIRED'});await expect(sessions.start(other.user.id,startInput(),key())).rejects.toMatchObject({status:404});});
+ it('rejects a foreign vehicle and grants no verified access from a plate association',async()=>{await expect(vehicles.get(other.user.id,vehicleId)).rejects.toMatchObject({status:404});await expect(sessions.start(other.user.id,startInput(),key())).rejects.toMatchObject({status:404});const linked=await vehicles.create(other.user.id,{plateNumber:'1234567',type:'private'});expect(linked.verifiedAt).toBeNull();expect(linked.role).toBe('driver');await expect(vehicles.permits(other.user.id,vehicleId)).rejects.toMatchObject({status:403});});
  it('validates request bodies and rejects untrusted client prices',async()=>{const r=await request(app).post('/api/v1/parking/sessions').auth(driver.session.accessToken,{type:'bearer'}).set('Idempotency-Key',key()).send({...startInput(),price:1});expect(r.status).toBe(400);});
  it('enforces CORS allowlist',async()=>{expect((await request(app).get('/health').set('Origin','https://evil.invalid')).status).toBe(403);});
+ it('allows the loopback origin used by Expo web',async()=>{
+  const response=await request(app).options('/api/v1/auth/dev-login')
+   .set('Origin','http://127.0.0.1:8081')
+   .set('Access-Control-Request-Method','POST')
+   .set('Access-Control-Request-Headers','content-type');
+  expect(response.status).toBe(204);
+  expect(response.headers['access-control-allow-origin']).toBe('http://127.0.0.1:8081');
+ });
 });
 describe('parking and ledger invariants',()=>{
  it('starts, closes, charges, and keeps immutable history',async()=>{await credit(driver.user.id);const s=await sessions.start(driver.user.id,startInput(),key());await backdate(s.id);const done=await sessions.stop(driver.user.id,s.id,key());expect(done.status).toBe('COMPLETED');expect(done.finalCost).toBeGreaterThan(0);expect(done.paymentStatus).toBe('paid');expect(await db.walletTransaction.count({where:{parkingSessionId:s.id}})).toBe(1);});

@@ -1,7 +1,10 @@
 import type { WalletService } from '../types';
 import { api,query,segment } from './apiClient';
+import { secureStorage } from '../storage';
+import { TopUpRecovery } from '@/utils/pendingPayment';
+export const topUpRecovery = new TopUpRecovery(secureStorage);
 export const httpWalletService:WalletService={
- get:()=>api('/wallet'),topUp:({userId,idempotencyKey,...body})=>api('/wallet/topups',{method:'POST',body,key:idempotencyKey}),
+ get:()=>api('/wallet'),topUp:({userId,idempotencyKey,...body})=>topUpRecovery.run(userId,body,idempotencyKey??'',(payload,key)=>api('/wallet/topups',{method:'POST',body:payload,key})),
  setAutoTopUp:({userId,...body})=>api('/wallet/auto-topup',{method:'PATCH',body}),
  listPaymentMethods:()=>api('/payment-methods'),addPaymentMethod:({userId,...body})=>api('/payment-methods',{method:'POST',body}),
  async setDefaultPaymentMethod(_u,id){await api(`/payment-methods/${segment(id)}/default`,{method:'PATCH',body:{}});},

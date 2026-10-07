@@ -1,16 +1,20 @@
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Path, Rect, Stop, Circle, G } from 'react-native-svg';
 import { AppText } from '@/components/ui/AppText';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 import { palette } from '@/theme/colors';
+import { useAppConfigStore } from '@/store/appConfigStore';
 
 export interface LogoMarkProps {
   size?: number;
   /** `light` for dark backgrounds, `dark` for light surfaces. */
   tone?: 'light' | 'dark';
   style?: StyleProp<ViewStyle>;
+  /** Local previews use their own image and need the built-in mark as fallback. */
+  usePublishedBrand?: boolean;
 }
 
 /**
@@ -19,10 +23,17 @@ export interface LogoMarkProps {
  *
  * Drawn as vectors so it stays crisp at any size and ships no raster assets.
  */
-export function LogoMark({ size = 64, tone = 'dark', style }: LogoMarkProps) {
+export function LogoMark({ size = 64, tone = 'dark', style, usePublishedBrand = true }: LogoMarkProps) {
+  const config = useAppConfigStore(state => state.config);
+  const { locale } = useLocale();
+  const url = usePublishedBrand ? config.logoUrl : null;
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [url]);
   const gradientFrom = tone === 'light' ? palette.emerald400 : palette.emerald500;
   const gradientTo = tone === 'light' ? palette.emerald600 : palette.emerald700;
   const cutout = tone === 'light' ? palette.emerald950 : palette.white;
+
+  if (url && !failed) return <View style={style}><Image source={{ uri: url }} accessibilityLabel={config.appName[locale]} resizeMode="contain" onError={() => setFailed(true)} style={{ width: size, height: size }} /></View>;
 
   return (
     <View style={style} accessibilityRole="image" accessibilityLabel="ParkFlow">
@@ -68,12 +79,12 @@ export interface WordmarkProps {
 }
 
 /**
- * Name + mark lockup. Product naming lives here and in `brand.*` translation
- * keys alone, so renaming the app stays a two-file change.
+ * Name + mark lockup uses the current validated publication.
  */
 export function Wordmark({ size = 'md', tone = 'dark', showRegion = true, style }: WordmarkProps) {
-  const { row, t } = useLocale();
+  const { row, t, locale } = useLocale();
   const { colors } = useTheme();
+  const appName = useAppConfigStore(state => state.config.appName[locale]);
 
   const markSize = size === 'lg' ? 56 : size === 'md' ? 40 : 30;
   const titleVariant = size === 'lg' ? 'h1' : size === 'md' ? 'h2' : 'h3';
@@ -85,7 +96,7 @@ export function Wordmark({ size = 'md', tone = 'dark', showRegion = true, style 
       <LogoMark size={markSize} tone={tone} />
       <View style={{ gap: 1 }}>
         <AppText variant={titleVariant} style={{ color }}>
-          {t('brand.name')}
+          {appName}
         </AppText>
         {showRegion ? (
           <AppText variant="caption" style={{ color: mutedColor, letterSpacing: 1.4 }}>

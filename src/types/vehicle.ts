@@ -41,6 +41,7 @@ export interface UserVehicle {
 export interface UserVehicleView extends Vehicle {
   linkId: ID;
   role: UserVehicleRole;
+  verifiedAt?: ISODateString | null;
   nickname?: string;
   isDefault: boolean;
   displayName: string;

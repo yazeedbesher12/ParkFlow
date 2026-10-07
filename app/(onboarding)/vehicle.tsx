@@ -8,6 +8,7 @@ import { useLocale } from '@/hooks/useLocale';
 import { useBlockHardwareBack } from '@/hooks/useBlockHardwareBack';
 import { useAddVehicle } from '@/hooks/useVehicles';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { usePhoneAuthStore } from '@/store/phoneAuthStore';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
 
@@ -20,6 +21,7 @@ export default function AddFirstVehicleScreen() {
   const completeOnboarding = usePreferencesStore((s) => s.completeOnboarding);
 
   const finish = () => {
+    usePhoneAuthStore.getState().setVehicleSetup(undefined);
     completeOnboarding();
     router.replace('/(tabs)/map');
   };

@@ -6,6 +6,33 @@ export type ParkingMode = 'start_stop' | 'prepaid';
 /** Availability is deliberately coarse — we never claim exact free-space counts. */
 export type AvailabilityLevel = 'available' | 'limited' | 'full' | 'unknown';
 
+export type ParkingAvailabilitySource = 'operator' | 'admin' | 'sensor' | 'anpr' | 'community' | 'unknown';
+export type ParkingAvailabilityFreshness = 'fresh' | 'aging' | 'stale' | 'unknown';
+export interface ParkingAvailabilityProvenance {
+  source: ParkingAvailabilitySource;
+  recordedAt: ISODateString | null;
+  ageSeconds: number | null;
+  confidence: number;
+  freshness: ParkingAvailabilityFreshness;
+  availableSpaces?: number;
+  occupiedSpaces?: number;
+  isGuaranteed: boolean;
+}
+
+export type ParkingFeedbackOutcome = 'found' | 'not_found' | 'delayed';
+export type ParkingFeedbackDelayBucket = 'under_5m' | '5_15m' | 'over_15m';
+export interface ParkingFeedback {
+  id: ID;
+  userId: ID;
+  zoneId: ID;
+  sessionId?: ID;
+  reservationId?: ID;
+  outcome: ParkingFeedbackOutcome;
+  delayBucket?: ParkingFeedbackDelayBucket;
+  idempotencyKey?: string;
+  createdAt: ISODateString;
+}
+
 export type ParkingKind = 'street' | 'garage' | 'lot' | 'private';
 
 export type ParkingOwnership = 'municipal' | 'public' | 'private' | 'public_transport';
@@ -55,6 +82,8 @@ export interface ParkingZone {
   /** Which pricing model this zone runs. Never hard-code one globally. */
   supportedModes: ParkingMode[];
   defaultMode: ParkingMode;
+  /** Changes whenever management updates the location or its pricing rules. */
+  version?: number;
   tariff: Tariff;
   operatingHours: OperatingHours[];
   availability: AvailabilityLevel;
@@ -70,10 +99,17 @@ export interface ParkingZone {
   parkingAllowed?: boolean;
   /** Marks temporary prototype metadata that must be verified before production use. */
   prototypeData?: boolean;
+  /** Inventory source used for reservations. Older APIs may omit this field. */
+  inventoryMode?: 'demo' | 'live';
+  inventoryProvider?: string;
   supportedEntryMethods: ParkingEntryMethod[];
   updatedAt: ISODateString;
   /** Recent driver reports; when present, `availability` reflects them. */
   crowd?: CrowdAvailability;
+  /** Availability source and freshness. API DTOs always include this. */
+  availabilityProvenance?: ParkingAvailabilityProvenance;
+  /** Alias retained for consumers that call the field simply `provenance`. */
+  provenance?: ParkingAvailabilityProvenance;
 }
 
 /** A garage / structured facility. Zones may belong to one. */
@@ -88,7 +124,13 @@ export interface ParkingFacility {
   hasAnpr: boolean;
   hasBarrier: boolean;
   availability: AvailabilityLevel;
+  entrances?: FacilityNavigationPoint[];
+  exits?: FacilityNavigationPoint[];
+  walkingDestinations?: WalkingDestination[];
 }
+export interface FacilityNavigationPoint { id?: string; name?: string; nameAr?: string; level?: number; location?: GeoPoint }
+export interface WalkingDestination { id?: string; name?: string; nameAr?: string; location?: GeoPoint }
+export interface FacilityNavigation { facilityId: ID; levels: number; entrances: FacilityNavigationPoint[]; exits: FacilityNavigationPoint[]; walkingDestinations: WalkingDestination[] }
 
 export interface ParkingSpot {
   id: ID;

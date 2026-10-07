@@ -5,13 +5,14 @@ import { services, type CreateVehicleInput } from '@/services';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { queryKeys } from './queryKeys';
 import { useUserId } from './useSession';
+import { cachedRead } from '@/offline/storage';
 
 export function useVehicles() {
   const userId = useUserId();
 
   return useQuery({
     queryKey: queryKeys.vehicles(userId ?? 'anonymous'),
-    queryFn: () => services.vehicles.list(userId!),
+    queryFn: () => cachedRead(userId!, 'vehicles', () => services.vehicles.list(userId!)),
     enabled: Boolean(userId),
   });
 }
@@ -21,7 +22,7 @@ export function useVehicle(vehicleId?: string) {
 
   return useQuery({
     queryKey: queryKeys.vehicle(userId ?? 'anonymous', vehicleId ?? ''),
-    queryFn: () => services.vehicles.get(userId!, vehicleId!),
+    queryFn: () => cachedRead(userId!, `vehicle.${vehicleId!}`, () => services.vehicles.get(userId!, vehicleId!)),
     enabled: Boolean(userId && vehicleId),
   });
 }

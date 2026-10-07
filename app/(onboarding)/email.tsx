@@ -1,124 +1,91 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-
-import {
-  AppButton,
-  AppHeader,
-  AppText,
-  InlineNotice,
-  Reveal,
-  Screen,
-  TextField,
-} from '@/components/ui';
 import { z } from 'zod';
+import { AppButton, AppHeader, AppText, InlineNotice, Reveal, Screen, TextField } from '@/components/ui';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
+import { useDeadline } from '@/hooks/useDeadline';
 import { services } from '@/services';
-import type { AuthResult } from '@/services/types';
-import type { OtpChallenge } from '@/types';
+import type { AuthConfig } from '@/services/types';
+import { usePhoneAuthStore } from '@/store/phoneAuthStore';
+import { useAuthStore } from '@/store/authStore';
+import { authLanding, retryDelaySeconds } from '@/utils/authFlow';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
-import { usePreferencesStore } from '@/store/preferencesStore';
 
 export default function EmailScreen() {
   const router = useRouter();
   const { t } = useLocale();
-  const completeOnboarding = usePreferencesStore((state) => state.completeOnboarding);
-  const [email, setEmail] = useState('');
+  const user = useAuthStore((state) => state.user);
+  const { purpose, fullName, clearChallenge } = usePhoneAuthStore();
+  const [emailInput, setEmailInput] = useState('');
   const [touched, setTouched] = useState(false);
-  const normalized = email.trim().toLowerCase();
-  const isValid = z.email().max(254).safeParse(normalized).success;
-  const showError = touched && normalized.length > 0 && !isValid;
-  const devSkipEmailOtp = __DEV__ && process.env.EXPO_PUBLIC_DEV_SKIP_EMAIL_OTP === 'true';
-
-  const continueWithEmail = useMutation<AuthResult | OtpChallenge>({
-    mutationFn: () => devSkipEmailOtp
-      ? services.auth.devLogin({ email: normalized })
-      : services.auth.requestOtp({ email: normalized }),
-    onSuccess: (result) => {
+  const [config, setConfig] = useState<AuthConfig>();
+  const [configFailed, setConfigFailed] = useState(false);
+  const [configAttempt, setConfigAttempt] = useState(0);
+  const [developmentRetryAt, setDevelopmentRetryAt] = useState(0);
+  // Refresh on every entry so stopping the server's email mode restores phone login.
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    setConfig(undefined);
+    setConfigFailed(false);
+    void services.auth.getConfig().then((nextConfig) => {
+      if (active) setConfig(nextConfig);
+    }).catch(() => { if (active) setConfigFailed(true); });
+    return () => { active = false; setConfig(undefined); };
+  }, [configAttempt]));
+  const email = emailInput.trim().toLowerCase();
+  const emailValid = z.email().max(254).safeParse(email).success;
+  const waitSeconds = useDeadline(developmentRetryAt);
+  const login = useMutation({
+    mutationFn: () => services.auth.devLogin({ email, purpose, ...(purpose === 'register' ? { fullName } : {}) }),
+    onSuccess: ({ user }) => {
+      clearChallenge();
       haptics.success();
-      if ('session' in result) {
-        if (result.user.fullName) {
-          completeOnboarding();
-          router.replace('/(tabs)/map');
-        } else {
-          router.replace('/(onboarding)/name');
-        }
-        return;
-      }
-      router.push({
-        pathname: '/(onboarding)/otp',
-        params: {
-          challengeId: result.challengeId,
-          email: result.email,
-          resendAfter: String(result.resendAfterSeconds),
-        },
-      });
+      router.replace(authLanding(user));
     },
-    onError: () => haptics.error(),
+    onError: (error) => {
+      const delay = retryDelaySeconds(error);
+      if (delay) setDevelopmentRetryAt(Date.now() + delay * 1000);
+      haptics.error();
+    },
   });
-
+  if (user) return <Redirect href={authLanding(user)} />;
+  if (config && !config.developmentEmailLoginEnabled) return <Redirect href="/(onboarding)/phone" />;
+  if (config && purpose === 'register' && !fullName) return <Redirect href="/(onboarding)/name" />;
+  const configReady = config?.developmentEmailLoginEnabled === true && !configFailed;
+  const submit = () => {
+    if (!emailValid || !configReady || waitSeconds || login.isPending) return;
+    login.mutate();
+  };
   return (
-    <Screen keyboardAvoiding safeBottom>
+    <Screen keyboardAvoiding>
       <AppHeader />
-
       <Reveal style={{ gap: spacing.sm }}>
-        <AppText variant="h1">{t('onboarding.emailTitle')}</AppText>
-        <AppText variant="bodyLg" color="textSecondary">
-          {t('onboarding.emailSubtitle')}
-        </AppText>
+        <AppText variant="h1">{t(purpose === 'register' ? 'onboarding.emailTitle' : 'onboarding.emailLoginTitle')}</AppText>
+        <AppText variant="bodyLg" color="textSecondary">{t(configReady ? 'onboarding.devEmailSubtitle' : 'common.loading')}</AppText>
       </Reveal>
-
       <View style={{ marginTop: spacing.xxxl, gap: spacing.lg }}>
-        <TextField
-          label={t('onboarding.emailLabel')}
-          emphasis="strong"
-          value={email}
-          onChangeText={setEmail}
-          onBlur={() => setTouched(true)}
-          placeholder="you@example.com"
-          keyboardType="email-address"
-          textContentType="emailAddress"
-          autoComplete="email"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoFocus
-          maxLength={254}
-          error={showError ? t('onboarding.emailInvalid') : undefined}
-          testID="email-input"
-        />
-
-        {continueWithEmail.isError ? (
-          <InlineNotice
-            tone="danger"
-            title={t('common.somethingWrong')}
-            body={errorMessage(continueWithEmail.error)}
-          />
-        ) : null}
+        <TextField label={t('onboarding.emailLabel')} emphasis="strong" value={emailInput}
+          onChangeText={(value) => { setEmailInput(value); login.reset(); }} onBlur={() => setTouched(true)}
+          placeholder="you@example.com" keyboardType="email-address" textContentType="emailAddress"
+          autoComplete="email" autoCapitalize="none" autoCorrect={false} autoFocus maxLength={254} returnKeyType="done"
+          editable={!login.isPending} onSubmitEditing={submit}
+          error={touched && !emailValid ? t('onboarding.emailInvalid') : undefined} testID="email-input" />
+        {configReady ? <InlineNotice tone="warning" title={t('onboarding.devLoginTitle')} body={t('onboarding.devEmailLoginBody')} /> : null}
+        {configFailed ? <InlineNotice tone="danger" title={t('common.somethingWrong')} body={t('onboarding.authConfigFailed')}
+          action={{ label: t('common.retry'), onPress: () => setConfigAttempt((attempt) => attempt + 1) }} /> : null}
+        {login.isError ? <InlineNotice tone="danger" title={t('common.somethingWrong')} body={errorMessage(login.error)} /> : null}
+        {configReady && waitSeconds > 0 ? <InlineNotice tone="warning" title={t('onboarding.otpWait')} body={t('onboarding.otpRetryIn', { seconds: waitSeconds })} /> : null}
       </View>
-
       <View style={{ flex: 1, minHeight: spacing.xl }} />
-
       <View style={{ gap: spacing.lg }}>
-        <AppText
-          variant="caption"
-          color="textTertiary"
-          align="center"
-          style={{ maxWidth: 340, alignSelf: 'center' }}
-        >
-          {t('onboarding.terms')}
-        </AppText>
-        <AppButton
-          label={t('common.continue')}
-          disabled={!isValid}
-          loading={continueWithEmail.isPending}
-          onPress={() => continueWithEmail.mutate()}
-          testID="email-continue"
-        />
+        <AppText variant="caption" color="textTertiary" align="center">{t('onboarding.terms')}</AppText>
+        <AppButton label={t('common.continue')} disabled={!emailValid || !configReady || waitSeconds > 0}
+          loading={login.isPending || (!configReady && !configFailed)} onPress={submit} testID="email-continue" />
       </View>
-
     </Screen>
   );
 }
