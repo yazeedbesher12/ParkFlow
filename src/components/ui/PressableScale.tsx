@@ -1,5 +1,5 @@
 import { forwardRef, type ReactNode } from 'react';
-import { Pressable, type PressableProps, type ViewStyle, type StyleProp } from 'react-native';
+import { Platform, Pressable, type PressableProps, type ViewStyle, type StyleProp } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -27,20 +27,31 @@ export interface PressableScaleProps extends Omit<PressableProps, 'style'> {
  */
 export const PressableScale = forwardRef<React.ComponentRef<typeof Pressable>, PressableScaleProps>(
   function PressableScale(
-    { children, style, scaleTo = 0.97, dimTo = 1, haptic = 'none', onPressIn, onPressOut, disabled, ...rest },
+    { children, style, scaleTo = 0.97, dimTo = 1, haptic = 'none', onPressIn, onPressOut, onHoverIn, onHoverOut, disabled, ...rest },
     ref,
   ) {
     const pressed = useSharedValue(0);
+    // Desktop web only: a faint lift on hover so pointer users get feedback
+    // before they click. Touch devices never fire hover, so they are unaffected.
+    const hovered = useSharedValue(0);
 
     const animatedStyle = useAnimatedStyle(() => ({
       transform: [{ scale: 1 - pressed.value * (1 - scaleTo) }],
-      opacity: 1 - pressed.value * (1 - dimTo),
+      opacity: (1 - pressed.value * (1 - dimTo)) * (1 - hovered.value * 0.06),
     }));
 
     return (
       <AnimatedPressable
         ref={ref}
         disabled={disabled}
+        onHoverIn={(event) => {
+          if (Platform.OS === 'web' && !disabled) hovered.value = withTiming(1, { duration: duration.fast });
+          onHoverIn?.(event);
+        }}
+        onHoverOut={(event) => {
+          if (Platform.OS === 'web') hovered.value = withTiming(0, { duration: duration.fast });
+          onHoverOut?.(event);
+        }}
         onPressIn={(event) => {
           pressed.value = withTiming(1, { duration: duration.instant });
           if (haptic === 'select') haptics.select();

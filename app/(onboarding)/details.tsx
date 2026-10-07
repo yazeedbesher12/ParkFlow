@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { z } from 'zod';
-import { AppButton, AppText, InlineNotice, Reveal, Screen, TextField } from '@/components/ui';
+import { OnboardingStepper, AppButton, AppText, InlineNotice, Reveal, Screen, TextField } from '@/components/ui';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 import { useBlockHardwareBack } from '@/hooks/useBlockHardwareBack';
@@ -50,6 +50,7 @@ export default function ProfileDetailsScreen() {
   return (
     <Screen keyboardAvoiding>
       <View style={{ height: spacing.giant }} />
+      <OnboardingStepper current={!user?.phoneVerifiedAt ? 2 : 3} skipVerification={!user?.phoneVerifiedAt} email={developmentEmailAccount} />
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t('onboarding.detailsTitle')}</AppText>
         <AppText variant="bodyLg" color="textSecondary">{t(developmentEmailAccount ? 'onboarding.detailsDevelopmentEmailSubtitle' : user?.phoneVerifiedAt ? 'onboarding.detailsSubtitle' : 'onboarding.detailsDevelopmentSubtitle')}</AppText>

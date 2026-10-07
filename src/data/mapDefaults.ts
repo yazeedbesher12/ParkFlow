@@ -71,6 +71,6 @@ export const LANDMARKS: Landmark[] = [
 /** City-level opening view centred on Al-Manara Square. */
 export const DEFAULT_REGION = {
   ...RAMALLAH_CENTER,
-  latitudeDelta: 0.024,
-  longitudeDelta: 0.024,
+  latitudeDelta: 0.08,
+  longitudeDelta: 0.09,
 };

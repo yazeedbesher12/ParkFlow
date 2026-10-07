@@ -12,7 +12,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const calls = [], routes = [], persisted = new Map();
 const Focus = React.createContext(true);
 const router = { push: route => routes.push(['push', route]), replace: route => routes.push(['replace', route]) };
-const ui = Object.fromEntries(['AppButton', 'AppHeader', 'AppText', 'InlineNotice', 'Reveal', 'Screen', 'TextField'].map(name => [name, props => React.createElement(name, props, props.children)]));
+const ui = Object.fromEntries(['AppButton', 'AppHeader', 'AppText', 'InlineNotice', 'OnboardingStepper', 'Reveal', 'Screen', 'TextField'].map(name => [name, props => React.createElement(name, props, props.children)]));
 const stubs = {
   'react-native': { View: props => React.createElement('View', props, props.children) },
   'expo-router': {
@@ -27,7 +27,7 @@ const stubs = {
   '@/hooks/useLocale': { useLocale: () => ({ t: (key, values) => values ? `${key}:${values.seconds}` : key }) },
   '@/hooks/useBlockHardwareBack': { useBlockHardwareBack() {} },
   '@/utils/haptics': { haptics: { success() {}, error() {} } },
-  '@/services/storage': { secureStorage: {
+  '@/services/storage': { appStorage: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }, secureStorage: {
     getItem: async key => persisted.get(key) ?? null,
     setItem: async (key, value) => { persisted.set(key, value); },
     removeItem: async key => { persisted.delete(key); },
@@ -49,7 +49,11 @@ function load(relative) {
     if (Object.hasOwn(stubs, id)) return stubs[id];
     if (id === '@/services') return { services: { auth: load('src/services/http/authService.ts').httpAuthService } };
     if (id === './apiClient') return stubs['@/services/http/apiClient'];
-    if (id.startsWith('@/')) return load(`src/${id.slice(2)}.ts`);
+    if (id.startsWith('@/') || id.startsWith('.')) {
+      const base = id.startsWith('@/') ? path.resolve(__dirname, '../src', id.slice(2)) : path.resolve(path.dirname(filename), id);
+      const resolved = [base, `${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts')].find(candidate => fs.existsSync(candidate) && fs.statSync(candidate).isFile());
+      if (resolved && !resolved.endsWith('.json')) return load(path.relative(path.resolve(__dirname, '..'), resolved));
+    }
     return originalRequire(id);
   };
   loaded._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
@@ -139,13 +143,13 @@ test('development email login retains the server administrator identity and dest
   assert.equal(useAuthStore.getState().user.fullName, 'Existing Admin');
 });
 
-test('unknown email login stays signed out and displays the server error', async () => {
+test('unknown email login stays signed out and displays the localized error', async () => {
   await mount(); await settle(0, emailConfig); await enter(); await submit();
   await settle(1, new Error('No account found. Please register first.'), true);
   assert.equal(persisted.has('auth'), false);
   assert.equal(useAuthStore.getState().user, undefined);
   assert.deepEqual(routes, []);
-  assert.equal(notices().some(notice => notice.props.body === 'No account found. Please register first.'), true);
+  assert.equal(notices().some(notice => notice.props.body === 'حدث خطأ ما. حاول مرة أخرى.'), true);
 });
 
 test('email registration requires a name after configuration chooses email', async () => {

@@ -12,9 +12,16 @@ import {
 import { TestLocationMarker } from './TestLocationMarker';
 import { RoadReportMarker } from './RoadReportMarker';
 import { EvStationMarker } from './EvStationMarker';
+import { CarServiceMarker } from './CarServiceMarker';
+import { NeedStopMarker } from './NeedStopMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
+import { AppText } from '@/components/ui';
+import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
-import type { GeoPoint, GeoRegion } from '@/types';
+import { radius } from '@/theme/radius';
+import { shadow } from '@/theme/shadows';
+import { spacing } from '@/theme/spacing';
+import type { GeoPoint, GeoRegion, RouteTrafficState } from '@/types';
 import { isValidGeoPoint, isValidGeoRegion, normalizeGeoPoints } from '@/utils/coordinates';
 import { DEFAULT_REGION } from '@/data/mapDefaults';
 
@@ -37,6 +44,28 @@ const PLACES = `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}
 
 type EdgePadding = { top: number; right: number; bottom: number; left: number };
 type PendingFit = { coordinates: GeoPoint[]; edgePadding: EdgePadding; durationMs: number };
+
+const TRAFFIC_COLORS: Record<RouteTrafficState, string> = {
+  normal: '#16A34A',
+  slow: '#F59E0B',
+  traffic_jam: '#DC2626',
+};
+
+const TRAFFIC_LABELS: Record<RouteTrafficState, string> = {
+  normal: 'Clear traffic',
+  slow: 'Slow traffic',
+  traffic_jam: 'Heavy traffic',
+};
+const NEED_DETOUR_COLOR = '#7C3AED';
+
+const withTrafficTooltip = (line: L.Polyline, state?: RouteTrafficState) => {
+  if (!state) return line;
+  return line.bindTooltip(TRAFFIC_LABELS[state], {
+    direction: 'top',
+    opacity: 0.95,
+    sticky: true,
+  });
+};
 
 function fitMapToCoordinates(map: L.Map, request: PendingFit): 'applied' | 'deferred' {
   const coordinates = normalizeGeoPoints(request.coordinates);
@@ -157,17 +186,20 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     checkpoints,
     onSelectCheckpoint,
     evStations, selectedEvStationId, onSelectEvStation,
+    carServices, activeCarServiceCategory, selectedCarServiceId, onSelectCarService, carServiceAccessibilityLabel,
     roadReports,
     selectedRoadReportId,
     onSelectRoadReport,
     reportDraft,
     route,
     landmark,
+    needStops,
     style,
   },
   ref,
 ) {
   const { colors } = useTheme();
+  const { t, row, isRTL } = useLocale();
   const hostRef = useRef<View>(null);
   const mapRef = useRef<L.Map | null>(null);
   const pendingFitRef = useRef<PendingFit | undefined>(undefined);
@@ -255,6 +287,13 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     const mainLine = route.coordinates.filter(isValidGeoPoint);
     if (mainLine.length !== route.coordinates.length || mainLine.length < 2) return;
 
+    const trafficSegments = route.trafficSegments
+      ?.filter((segment) => segment.coordinates.length >= 2 && segment.coordinates.every(isValidGeoPoint));
+    const hasTrafficSegments = Boolean(trafficSegments?.length);
+    const detourSegments = route.detourSegments
+      ?.filter((line) => line.length >= 2 && line.every(isValidGeoPoint)) ?? [];
+    const detourOpacity = route.detourMode === 'comparison' ? 0.52 : 1;
+    const detourDash = route.detourMode === 'comparison' ? '6 8' : undefined;
     const layers = [
       ...route.alternatives
         .filter((line) => line.length >= 2 && line.every(isValidGeoPoint))
@@ -268,11 +307,47 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
         ),
       // A light casing under the route keeps it readable on satellite imagery.
       L.polyline(toLatLngs(mainLine), { color: colors.surface, weight: 9, opacity: 0.9 }),
-      L.polyline(toLatLngs(mainLine), { color: colors.brand, weight: 5 }),
+      ...(hasTrafficSegments
+        ? trafficSegments!.map((segment) =>
+            withTrafficTooltip(
+              L.polyline(toLatLngs(segment.coordinates), {
+                color: TRAFFIC_COLORS[segment.state],
+                weight: 5,
+              }),
+              segment.state,
+            ),
+          )
+        : [
+            withTrafficTooltip(
+              L.polyline(toLatLngs(mainLine), {
+                color: route.trafficState ? TRAFFIC_COLORS[route.trafficState] : colors.brand,
+                weight: 5,
+              }),
+              route.trafficState,
+            ),
+          ]),
+      ...detourSegments.flatMap((line, index) => [
+        L.polyline(toLatLngs(line), {
+          color: colors.surface,
+          weight: route.detourMode === 'comparison' ? 8 : 10,
+          opacity: 0.86,
+          dashArray: detourDash,
+        }),
+        L.polyline(toLatLngs(line), {
+          color: NEED_DETOUR_COLOR,
+          weight: route.detourMode === 'comparison' ? 4 : 6,
+          opacity: detourOpacity,
+          dashArray: detourDash,
+        }).bindTooltip(t('route.needDetourLegend'), {
+          direction: 'top',
+          opacity: 0.95,
+          sticky: true,
+        }),
+      ]),
     ];
     layers.forEach((layer) => layer.addTo(map));
     return () => layers.forEach((layer) => layer.remove());
-  }, [route, colors]);
+  }, [route, colors, t]);
 
   useImperativeHandle(ref, () => ({
     animateToRegion: (next, durationMs = 600) => {
@@ -315,6 +390,34 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
   return (
     <View style={[{ backgroundColor: colors.mapLand, overflow: 'hidden' }, style]}>
       <View ref={hostRef} style={[StyleSheet.absoluteFill, { zIndex: 0 }]} />
+
+      {route?.showRouteLegend && route.detourSegments?.length ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 112,
+            [isRTL ? 'right' : 'left']: spacing.md,
+            zIndex: 2,
+            gap: spacing.xs,
+            padding: spacing.sm,
+            borderRadius: radius.md,
+            backgroundColor: colors.glass,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: colors.glassBorder,
+            ...shadow.xs,
+          }}
+        >
+          <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
+            <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: colors.brand }} />
+            <AppText variant="caption" color="textSecondary">{t('route.standardLegend')}</AppText>
+          </View>
+          <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.xs }}>
+            <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: NEED_DETOUR_COLOR }} />
+            <AppText variant="caption" color="textSecondary">{t('route.needDetourLegend')}</AppText>
+          </View>
+        </View>
+      ) : null}
 
       {map && size ? (
         <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 1 }]}>
@@ -403,6 +506,16 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
               <EvStationMarker status={station.status} selected={station.id === selectedEvStationId} />
             </Pressable>;
           })}
+          {carServices?.map((service) => {
+            if (!activeCarServiceCategory || !isValidGeoPoint({ latitude: service.latitude, longitude: service.longitude })) return null;
+            const { x, y } = project(service.latitude, service.longitude);
+            if (x < -50 || y < -50 || x > size.x + 50 || y > size.y + 50) return null;
+            return <Pressable key={service.id} accessibilityRole="button" accessibilityLabel={carServiceAccessibilityLabel?.(service) ?? service.nameEn} accessibilityState={{ selected: service.id === selectedCarServiceId }}
+              onPress={() => onSelectCarService?.(service)}
+              style={{ position: 'absolute', left: x - 24, top: y - 24, width: 48, height: 48, zIndex: service.id === selectedCarServiceId ? 6 : 3 }}>
+              <CarServiceMarker category={activeCarServiceCategory} selected={service.id === selectedCarServiceId} />
+            </Pressable>;
+          })}
           {roadReports?.map((report) => {
             if (!isValidGeoPoint(report)) return null;
             const { x, y } = project(report.latitude, report.longitude);
@@ -440,6 +553,21 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
                 );
               })()
             : null}
+
+          {needStops?.map((stop) => {
+            if (!isValidGeoPoint(stop.location)) return null;
+            const { x, y } = project(stop.location.latitude, stop.location.longitude);
+            if (x < -110 || y < -60 || x > size.x + 110 || y > size.y + 60) return null;
+            return (
+              <View
+                key={stop.id}
+                pointerEvents="none"
+                style={{ position: 'absolute', left: x - 90, top: y - 44, width: 180, alignItems: 'center', zIndex: 7 }}
+              >
+                <NeedStopMarker name={stop.name} category={stop.category} />
+              </View>
+            );
+          })}
 
           {parkingLocations?.map((location) => {
             if (!isValidGeoPoint(location.location)) return null;

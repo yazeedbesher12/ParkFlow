@@ -1,19 +1,25 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { NotificationPreferences } from '@/types';
-import type { Locale } from '@/i18n';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n';
 import { appStorage, STORAGE_KEYS } from '@/services/storage';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 interface PreferencesState {
   locale: Locale;
+  /** False for old installs that still had the original English default. */
+  localeChosen: boolean;
   themeMode: ThemeMode;
   /** Which of the user's vehicles the map / start-parking flow is aimed at. */
   selectedVehicleId?: string;
   notifications: NotificationPreferences;
   /** True once the first-run flow (email -> name -> vehicle) has finished. */
   onboardingComplete: boolean;
+  /** Speak parking-time alerts aloud. Opt-in, kept on this device only. */
+  voiceAlerts: boolean;
+  /** Language the microphone listens in. Separate from the app language. */
+  voiceLanguage: 'ar' | 'en';
   /** True once persisted preferences have been read — describes this run only. */
   hydrated: boolean;
 
@@ -22,6 +28,8 @@ interface PreferencesState {
   setSelectedVehicleId: (id?: string) => void;
   setNotificationPreference: (key: keyof NotificationPreferences, value: boolean) => void;
   completeOnboarding: () => void;
+  setVoiceAlerts: (enabled: boolean) => void;
+  setVoiceLanguage: (language: 'ar' | 'en') => void;
   setHydrated: () => void;
   reset: () => void;
 }
@@ -37,22 +45,29 @@ const defaultNotifications: NotificationPreferences = {
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set) => ({
-      locale: 'en',
+      locale: DEFAULT_LOCALE,
+      localeChosen: false,
       themeMode: 'light',
       selectedVehicleId: undefined,
       notifications: defaultNotifications,
       onboardingComplete: false,
+      voiceAlerts: false,
+      voiceLanguage: 'ar',
       hydrated: false,
 
-      setLocale: (locale) => set({ locale }),
+      setLocale: (locale) => set({ locale, localeChosen: true }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setSelectedVehicleId: (selectedVehicleId) => set({ selectedVehicleId }),
       setNotificationPreference: (key, value) =>
         set((state) => ({ notifications: { ...state.notifications, [key]: value } })),
       completeOnboarding: () => set({ onboardingComplete: true }),
+      setVoiceAlerts: (voiceAlerts) => set({ voiceAlerts }),
+      setVoiceLanguage: (voiceLanguage) => set({ voiceLanguage }),
       setHydrated: () => set({ hydrated: true }),
       reset: () =>
         set({
+          locale: DEFAULT_LOCALE,
+          localeChosen: false,
           selectedVehicleId: undefined,
           notifications: defaultNotifications,
           onboardingComplete: false,
@@ -60,17 +75,30 @@ export const usePreferencesStore = create<PreferencesState>()(
     }),
     {
       name: STORAGE_KEYS.preferences,
+      version: 2,
       storage: createJSONStorage(() => ({
         getItem: (name) => appStorage.getItem(name),
         setItem: (name, value) => appStorage.setItem(name, value),
         removeItem: (name) => appStorage.removeItem(name),
       })),
+      migrate: (persisted) => {
+        const state = persisted as Partial<PreferencesState> | undefined;
+        if (!state) return persisted;
+        return {
+          ...state,
+          locale: state.localeChosen ? state.locale ?? DEFAULT_LOCALE : DEFAULT_LOCALE,
+          localeChosen: Boolean(state.localeChosen),
+        };
+      },
       partialize: (state) => ({
         locale: state.locale,
+        localeChosen: state.localeChosen,
         themeMode: state.themeMode,
         selectedVehicleId: state.selectedVehicleId,
 
         onboardingComplete: state.onboardingComplete,
+        voiceAlerts: state.voiceAlerts,
+        voiceLanguage: state.voiceLanguage,
       }),
       onRehydrateStorage: () => (state) => state?.setHydrated(),
     },

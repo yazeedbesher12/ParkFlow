@@ -27,11 +27,11 @@ const normalizeZone = (zone: ApiParkingZone): ParkingZone => {
   return metadata
     ? {
         ...normalized,
-        ownership: metadata.ownership,
-        accessRestriction: metadata.accessRestriction,
-        accessRestrictionAr: metadata.accessRestrictionAr,
-        parkingAllowed: metadata.parkingAllowed,
-        prototypeData: metadata.prototypeData,
+        ownership: normalized.ownership ?? metadata.ownership,
+        accessRestriction: normalized.accessRestriction ?? metadata.accessRestriction,
+        accessRestrictionAr: normalized.accessRestrictionAr ?? metadata.accessRestrictionAr,
+        parkingAllowed: normalized.parkingAllowed ?? metadata.parkingAllowed,
+        prototypeData: normalized.prototypeData ?? metadata.prototypeData,
         // Collected availability is prototype metadata. Keep live API
         // `unknown` unknown unless the API explicitly marks this zone as a
         // prototype/demo response, so provenance cannot be contradicted by a

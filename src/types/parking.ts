@@ -84,6 +84,9 @@ export interface ParkingZone {
   defaultMode: ParkingMode;
   /** Changes whenever management updates the location or its pricing rules. */
   version?: number;
+  active?: boolean;
+  lifecycle?: string;
+  closures?: { startsAt: ISODateString; endsAt: ISODateString; reason?: string }[];
   tariff: Tariff;
   operatingHours: OperatingHours[];
   availability: AvailabilityLevel;

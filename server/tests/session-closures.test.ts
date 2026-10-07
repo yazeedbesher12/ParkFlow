@@ -99,6 +99,15 @@ describe('parking session availability', () => {
 });
 
 describe('public parking lifecycle', () => {
+  it('includes management closures in public details and recommendations data', async () => {
+    const { zoneId } = await fixture();
+    const startsAt = new Date(Date.now() - 60_000);
+    const endsAt = new Date(Date.now() + 60 * 60_000);
+    await db.parkingClosure.create({ data: { zoneId, startsAt, endsAt, reason: 'Maintenance' } });
+    expect((await getZone(zoneId)).closures).toEqual([expect.objectContaining({ startsAt, endsAt })]);
+    expect((await listZones({ search: zoneId }))[0].closures).toEqual([expect.objectContaining({ reason: 'Maintenance' })]);
+  });
+
   it('shows an active published zone in search, details and code lookup', async () => {
     const { zoneId } = await fixture();
     expect(await listZones({ search: zoneId })).toEqual([expect.objectContaining({ id: zoneId })]);

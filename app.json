@@ -45,6 +45,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "ParkFlow uses the microphone so you can search for a destination by voice.",
+          "speechRecognitionPermission": "ParkFlow uses speech recognition to turn your voice into a search."
+        }
+      ],
       "expo-font",
       "expo-localization",
       [

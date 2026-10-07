@@ -22,7 +22,7 @@ import { useReportZone } from '@/hooks/useCommunity';
 import { useSubmitParkingFeedback } from '@/hooks/useParking';
 import type { ParkingZone, ReportedAvailability } from '@/types';
 import { formatRate } from '@/utils/money';
-import { formatClockRange, formatDurationShort, isWithinOperatingHours } from '@/utils/time';
+import { formatClockRange, formatDurationShort, isParkingZoneOpen } from '@/utils/time';
 import { formatDistance } from '@/utils/geo';
 import { ZoneForecast } from './ZoneForecast';
 
@@ -107,7 +107,7 @@ export function ZoneSheet({
   }
 
   const today = zone.operatingHours.find((h) => h.weekday === new Date().getDay());
-  const isOpenNow = isWithinOperatingHours(zone.operatingHours);
+  const isOpenNow = isParkingZoneOpen(zone);
   const isGarage = zone.kind === 'garage' || zone.kind === 'private';
   const name = locale === 'ar' ? zone.nameAr : zone.name;
   const city = locale === 'ar' ? zone.cityAr : zone.city;
@@ -409,7 +409,7 @@ export function ZoneSheet({
           <AppButton
             label={t('zone.startParking')}
             onPress={() => onStartParking(zone)}
-            disabled={startDisabled || zone.availability === 'full'}
+            disabled={startDisabled || !isOpenNow || zone.availability === 'full'}
             style={{ flex: 1.35 }}
             testID="zone-start-parking"
           />

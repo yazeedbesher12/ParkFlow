@@ -34,7 +34,7 @@ export type AppConfigSection = z.infer<typeof sectionSchema>;
 export type LocalizedContent = { en: string; ar: string };
 export const defaultAppConfig: AppConfig = {
   schemaVersion: 1, brandColor: '#1F5A4A', logoUrl: null,
-  appName: { en: 'ParkFlow', ar: 'باركفلو' },
+  appName: { en: 'ParkFlow', ar: 'ParkFlow' },
   welcome: {
     headline: { en: 'Park. Pay. Go.', ar: 'اركن. ادفع. انطلق.' },
     body: { en: 'Easily find, pay and manage your parking.', ar: 'ابحث عن موقف وادفع وأدر وقوفك بسهولة.' },

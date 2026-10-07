@@ -12,7 +12,7 @@ export const env = z.object({
  DATABASE_URL:z.string().min(1), REDIS_URL:z.string().url(),
  JWT_ACCESS_SECRET:z.string().min(32), JWT_REFRESH_SECRET:z.string().min(32),
  ACCESS_TOKEN_TTL:z.coerce.number().int().positive().default(900), REFRESH_TOKEN_TTL:z.coerce.number().int().positive().default(2592000),
- CORS_ORIGINS:z.string().default('http://localhost:8081,http://127.0.0.1:8081'), OSRM_BASE_URL:z.string().url().default('https://router.project-osrm.org'),
+ CORS_ORIGINS:z.string().default('http://localhost:8081,http://127.0.0.1:8081'), OSRM_BASE_URL:z.string().url().default('https://router.project-osrm.org'), GOOGLE_ROUTES_API_KEY:optional,
  EMAIL_PROVIDER:z.enum(['smtp']).default('smtp'), EMAIL_FROM:z.email(),
  SMTP_HOST:z.string().min(1), SMTP_PORT:z.coerce.number().int().positive().default(465),
  SMTP_SECURE:z.enum(['true','false']).default('true').transform(v=>v==='true'), SMTP_USER:z.string().min(1), SMTP_PASSWORD:optional,

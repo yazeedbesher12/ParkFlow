@@ -16,6 +16,9 @@ function RouteDetails({ route }: { route: RouteResult }) {
   const { t, locale, row } = useLocale();
   const nameOf = (closure: RouteClosure) => (locale === 'ar' ? closure.nameAr : closure.nameEn);
   const statusOf = (closure: RouteClosure) => t(`roads.status.${closure.status}` as const);
+  const delayMinutes = route.trafficSummary?.delaySeconds
+    ? Math.max(1, Math.round(route.trafficSummary.delaySeconds / 60))
+    : undefined;
   const avoided = [
     ...new Map(
       route.rejected.flatMap((item) =>
@@ -37,6 +40,21 @@ function RouteDetails({ route }: { route: RouteResult }) {
 
   return (
     <View style={{ gap: spacing.xs, paddingHorizontal: spacing.sm }}>
+      {route.trafficSummary ? (
+        <View style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
+          <TriangleAlert size={15} color={colors.info} strokeWidth={2.2} />
+          <View style={{ flex: 1 }}>
+            <AppText variant="caption" color="infoText">
+              {t(`route.traffic.${route.trafficSummary.level}` as const)}
+            </AppText>
+            {delayMinutes ? (
+              <AppText variant="caption" color="textSecondary">
+                {t('route.trafficDelay', { minutes: delayMinutes })}
+              </AppText>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
       {lines.map((line) => (
         <View key={line.key} style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm }}>
           {line.safe ? (
@@ -53,10 +71,24 @@ function RouteDetails({ route }: { route: RouteResult }) {
   );
 }
 
+interface RouteNeedsComparison {
+  mode: 'needs' | 'shortest';
+  needAware: RouteResult;
+  shortest: RouteResult;
+  extraDurationSeconds: number;
+  extraDistanceMeters: number;
+  extraPercent: number;
+  significant: boolean;
+}
+
+const routeMinutes = (seconds: number) => Math.max(1, Math.round(seconds / 60));
+
 interface CompactRoutePanelProps {
   destination: RouteDestination;
   route?: RouteResult;
   loading: boolean;
+  needsNotice?: string;
+  routeNeedsComparison?: RouteNeedsComparison;
   detailsExpanded: boolean;
   onDetailsExpandedChange: (expanded: boolean) => void;
   onClose: () => void;
@@ -73,6 +105,8 @@ interface CompactRoutePanelProps {
   onKeepCurrent?: () => void;
   onUseAlternative?: () => void;
   onUseOriginal?: () => void;
+  onShowShortestRoute?: () => void;
+  onShowNeedAwareRoute?: () => void;
   showNoAlternative?: boolean;
 }
 
@@ -80,6 +114,8 @@ export function CompactRoutePanel({
   destination,
   route,
   loading,
+  needsNotice,
+  routeNeedsComparison,
   detailsExpanded,
   onDetailsExpandedChange,
   onClose,
@@ -96,11 +132,13 @@ export function CompactRoutePanel({
   onKeepCurrent,
   onUseAlternative,
   onUseOriginal,
+  onShowShortestRoute,
+  onShowNeedAwareRoute,
   showNoAlternative = false,
 }: CompactRoutePanelProps) {
   const { colors } = useTheme();
   const { t, locale, row } = useLocale();
-  const name = locale === 'ar' && destination.type === 'parking' ? destination.nameAr : destination.name;
+  const name = locale === 'ar' && destination.type !== 'ev_station' ? destination.nameAr ?? destination.name : destination.name;
   const Chevron = detailsExpanded ? ChevronDown : ChevronUp;
   const primaryImpact = impacts[0];
   const issueName = primaryImpact ? t(`roadReports.type.${primaryImpact.report.type}`) : '';
@@ -112,6 +150,25 @@ export function CompactRoutePanel({
   const durationDeltaMinutes = suggestedAlternative && originalDurationSeconds !== undefined
     ? Math.round((suggestedAlternative.durationSeconds - originalDurationSeconds) / 60)
     : 0;
+  const needAwareSummary = routeNeedsComparison
+    ? t('route.summary', {
+        minutes: routeMinutes(routeNeedsComparison.needAware.durationSeconds),
+        distance: formatDistance(routeNeedsComparison.needAware.distanceMeters),
+      })
+    : '';
+  const shortestSummary = routeNeedsComparison
+    ? t('route.summary', {
+        minutes: routeMinutes(routeNeedsComparison.shortest.durationSeconds),
+        distance: formatDistance(routeNeedsComparison.shortest.distanceMeters),
+      })
+    : '';
+  const differenceSummary = routeNeedsComparison
+    ? t('route.needAwareDifference', {
+        minutes: Math.round(routeNeedsComparison.extraDurationSeconds / 60),
+        distance: formatDistance(routeNeedsComparison.extraDistanceMeters),
+        percent: routeNeedsComparison.extraPercent,
+      })
+    : '';
 
   return (
     <View
@@ -157,6 +214,70 @@ export function CompactRoutePanel({
             </AppText>
           </View>
         </PressableScale>
+      ) : null}
+
+      {needsNotice ? (
+        <View style={{ padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warningSoft }}>
+          <AppText variant="caption" color="warningText">{needsNotice}</AppText>
+        </View>
+      ) : null}
+
+      {routeNeedsComparison ? (
+        <View style={{ gap: spacing.sm }}>
+          {routeNeedsComparison.significant && routeNeedsComparison.mode === 'needs' ? (
+            <View style={{ gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.dangerSoft }}>
+              <View style={{ flexDirection: row, alignItems: 'flex-start', gap: spacing.sm }}>
+                <TriangleAlert size={17} color={colors.dangerText} strokeWidth={2.3} />
+                <AppText variant="caption" color="dangerText" weight="bold" style={{ flex: 1 }}>
+                  {t('route.needAwareLongWarning', {
+                    minutes: Math.round(routeNeedsComparison.extraDurationSeconds / 60),
+                    distance: formatDistance(routeNeedsComparison.extraDistanceMeters),
+                  })}
+                </AppText>
+              </View>
+              <AppButton
+                label={t('route.showShortestRoute')}
+                onPress={onShowShortestRoute}
+                variant="danger"
+                size="sm"
+              />
+            </View>
+          ) : null}
+
+          <View style={{ gap: spacing.xs, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceAlt }}>
+            <View style={{ flexDirection: row, gap: spacing.sm, justifyContent: 'space-between' }}>
+              <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>{t('route.needAwareLabel')}</AppText>
+              <AppText variant="caption" color="text" numeric>{needAwareSummary}</AppText>
+            </View>
+            <View style={{ flexDirection: row, gap: spacing.sm, justifyContent: 'space-between' }}>
+              <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>{t('route.shortestLabel')}</AppText>
+              <AppText variant="caption" color="text" numeric>{shortestSummary}</AppText>
+            </View>
+            <View style={{ flexDirection: row, gap: spacing.sm, justifyContent: 'space-between' }}>
+              <AppText variant="caption" color={routeNeedsComparison.significant ? 'dangerText' : 'textSecondary'} style={{ flex: 1 }}>
+                {t('route.differenceLabel')}
+              </AppText>
+              <AppText variant="caption" color={routeNeedsComparison.significant ? 'dangerText' : 'textSecondary'} numeric>
+                {differenceSummary}
+              </AppText>
+            </View>
+            {routeNeedsComparison.mode === 'shortest' ? (
+              <AppButton
+                label={t('route.showNeedAwareRoute')}
+                onPress={onShowNeedAwareRoute}
+                variant="tonal"
+                size="sm"
+              />
+            ) : !routeNeedsComparison.significant ? (
+              <AppButton
+                label={t('route.showShortestRoute')}
+                onPress={onShowShortestRoute}
+                variant="secondary"
+                size="sm"
+              />
+            ) : null}
+          </View>
+        </View>
       ) : null}
 
       {usingAlternative ? (
@@ -211,13 +332,15 @@ export function CompactRoutePanel({
           onPress={onOpenMaps}
           icon={<Navigation size={15} color={colors.text} strokeWidth={2.2} />}
         />
-        <AppButton
-          label={destination.type === 'parking' ? t('zone.startParking') : t('ev.details')}
-          size="sm"
-          style={{ flex: 1 }}
-          onPress={destination.type === 'parking' ? onStartParking : onOpenDestination}
-          disabled={destination.type === 'parking' && (startDisabled || destination.zone.availability === 'full')}
-        />
+        {destination.type === 'place' ? null : (
+          <AppButton
+            label={destination.type === 'parking' ? t('zone.startParking') : t('ev.details')}
+            size="sm"
+            style={{ flex: 1 }}
+            onPress={destination.type === 'parking' ? onStartParking : onOpenDestination}
+            disabled={destination.type === 'parking' && (startDisabled || destination.zone.availability === 'full')}
+          />
+        )}
       </View>
     </View>
   );

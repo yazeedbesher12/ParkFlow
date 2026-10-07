@@ -1,4 +1,4 @@
-import type { ISODateString } from '@/types';
+import type { ISODateString, ParkingZone } from '@/types';
 
 export const nowIso = (): ISODateString => new Date().toISOString();
 
@@ -108,5 +108,13 @@ export function isWithinOperatingHours(
   const now = at.getHours() * 60 + at.getMinutes();
   const opens = clockMinutes(today.opensAt);
   const closes = clockMinutes(today.closesAt);
-  return closes >= opens ? now >= opens && now <= closes : now >= opens || now <= closes;
+  if (opens === closes) return true;
+  return closes > opens ? now >= opens && now <= closes : now >= opens || now <= closes;
+}
+
+/** Opening hours and management closures both constrain public parking. */
+export function isParkingZoneOpen(zone: ParkingZone, at = new Date()): boolean {
+  if (zone.active === false || (zone.lifecycle && zone.lifecycle !== 'published')) return false;
+  return isWithinOperatingHours(zone.operatingHours, at) && !(zone.closures ?? []).some(closure =>
+    new Date(closure.startsAt) <= at && at < new Date(closure.endsAt));
 }

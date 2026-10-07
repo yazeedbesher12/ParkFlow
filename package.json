@@ -49,7 +49,9 @@
     "react-native-web": "^0.21.2",
     "socket.io-client": "^4.8.3",
     "zod": "^4.4.3",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.15",
+    "expo-speech": "~57.0.3",
+    "expo-speech-recognition": "^57.1.0"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.22",

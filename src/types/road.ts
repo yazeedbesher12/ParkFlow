@@ -116,6 +116,9 @@ export interface RouteResult {
   coordinates: GeoPoint[];
   distanceMeters: number;
   durationSeconds: number;
+  /** Optional provider traffic flow, kept separate from ParkFlow Road Reports. */
+  trafficSegments?: RouteTrafficSegment[];
+  trafficSummary?: RouteTrafficSummary;
   /** Delay added for closures the chosen route still passes (0 when it avoids them all). */
   penaltySeconds: number;
   closuresOnRoute: RouteClosure[];
@@ -133,4 +136,22 @@ export interface RouteAlternative {
   coordinates: GeoPoint[];
   distanceMeters: number;
   durationSeconds: number;
+}
+
+export type RouteTrafficState = 'normal' | 'slow' | 'traffic_jam';
+
+export interface RouteTrafficSegment {
+  state: RouteTrafficState;
+  coordinates: GeoPoint[];
+}
+
+export interface RouteTrafficSummary {
+  provider: 'google-routes';
+  level: 'light' | 'moderate' | 'heavy';
+  state: RouteTrafficState;
+  durationSeconds?: number;
+  staticDurationSeconds?: number;
+  delaySeconds?: number;
+  delayPercent?: number;
+  intervalCounts: Record<RouteTrafficState, number>;
 }

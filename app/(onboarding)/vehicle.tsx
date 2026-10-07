@@ -1,13 +1,14 @@
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import { AppButton, AppText, InlineNotice, Reveal, Screen } from '@/components/ui';
+import { AppButton, AppText, InlineNotice, OnboardingStepper, Reveal, Screen } from '@/components/ui';
 import { VehicleForm } from '@/components/domain/VehicleForm';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 import { useBlockHardwareBack } from '@/hooks/useBlockHardwareBack';
 import { useAddVehicle } from '@/hooks/useVehicles';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { useAuthStore } from '@/store/authStore';
 import { usePhoneAuthStore } from '@/store/phoneAuthStore';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
@@ -16,6 +17,7 @@ export default function AddFirstVehicleScreen() {
   // The account already exists by this point — see useBlockHardwareBack.
   useBlockHardwareBack();
   const router = useRouter();
+  const user = useAuthStore(state => state.user);
   const { t } = useLocale();
   const addVehicle = useAddVehicle();
   const completeOnboarding = usePreferencesStore((s) => s.completeOnboarding);
@@ -29,6 +31,7 @@ export default function AddFirstVehicleScreen() {
   return (
     <Screen keyboardAvoiding>
       <View style={{ height: spacing.giant }} />
+      <OnboardingStepper current={!user?.phoneVerifiedAt ? 3 : 4} skipVerification={!user?.phoneVerifiedAt} email={!!user?.email && !user.phone} />
 
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t('onboarding.vehicleTitle')}</AppText>

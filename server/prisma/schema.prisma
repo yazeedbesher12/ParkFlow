@@ -1007,6 +1007,13 @@ enum EvAccessType {
   unknown
 }
 
+enum CarServiceCategory {
+  car_wash
+  oil_change
+  maintenance
+  tire_service
+}
+
 model EvChargingStation {
   id               String @id @default(uuid())
   name             String @db.VarChar(160)
@@ -1043,6 +1050,49 @@ model EvConnector {
 
   @@index([stationId, type, powerKw])
   @@map("ev_connectors")
+}
+
+model CarServiceBusiness {
+  id                 String                 @id @db.VarChar(120)
+  nameAr             String                 @db.VarChar(200)
+  nameEn             String                 @db.VarChar(200)
+  latitude           Float?
+  longitude          Float?
+  mapReady           Boolean                @default(false)
+  coordinateAccuracy String                 @db.VarChar(80)
+  coordinateNoteAr   String?                @db.VarChar(500)
+  coordinateNoteEn   String?                @db.VarChar(500)
+  addressAr          String?                @db.VarChar(300)
+  addressEn          String?                @db.VarChar(300)
+  phone              String?                @db.VarChar(32)
+  website            String?                @db.VarChar(2048)
+  openingHoursText   String?                @db.VarChar(300)
+  servicesAr         String[]
+  servicesEn         String[]
+  pricing            Json?
+  operatingStatus    String                 @db.VarChar(80)
+  verificationStatus String                 @db.VarChar(80)
+  sourceName         String                 @db.VarChar(200)
+  sourceUrl          String                 @db.VarChar(2048)
+  secondarySourceUrl String?                @db.VarChar(2048)
+  lastCheckedAt      DateTime
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  categories         CarServiceCategoryLink[]
+
+  @@index([latitude, longitude])
+  @@index([mapReady, latitude, longitude])
+  @@map("car_service_businesses")
+}
+
+model CarServiceCategoryLink {
+  businessId String @db.VarChar(120)
+  category   CarServiceCategory
+  business   CarServiceBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, category])
+  @@index([category])
+  @@map("car_service_category_links")
 }
 
 model OutboxEvent {

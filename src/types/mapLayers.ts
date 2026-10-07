@@ -1,3 +1,5 @@
+import type { CarServiceCategory } from './carService';
+
 export const PRIMARY_MAP_CATEGORIES = [
   'parking',
   'ev_charging',
@@ -11,7 +13,7 @@ export type PrimaryMapCategory = typeof PRIMARY_MAP_CATEGORIES[number];
 export const MAP_LAYER_AVAILABILITY: Record<PrimaryMapCategory, boolean> = {
   parking: true,
   ev_charging: true,
-  car_services: false,
+  car_services: true,
   roadside_help: false,
 };
 
@@ -21,3 +23,7 @@ export const isAvailablePrimaryCategory = (value: unknown): value is PrimaryMapC
   typeof value === 'string'
   && PRIMARY_MAP_CATEGORIES.includes(value as PrimaryMapCategory)
   && MAP_LAYER_AVAILABILITY[value as PrimaryMapCategory];
+
+export const isCarServiceCategory = (value: unknown): value is CarServiceCategory =>
+  typeof value === 'string'
+  && ['car_wash', 'oil_change', 'maintenance', 'tire_service'].includes(value);

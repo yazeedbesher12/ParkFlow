@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
-import { AppButton, AppHeader, AppText, InlineNotice, OtpInput, PressableScale, Reveal, Screen } from '@/components/ui';
+import { OnboardingStepper, AppButton, AppHeader, AppText, InlineNotice, OtpInput, PressableScale, Reveal, Screen } from '@/components/ui';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 import { useDeadline } from '@/hooks/useDeadline';
@@ -68,6 +68,7 @@ export default function OtpScreen() {
   return (
     <Screen keyboardAvoiding>
       <AppHeader />
+      {purpose === 'register' ? <OnboardingStepper current={2} /> : null}
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t('onboarding.otpPhoneTitle')}</AppText>
         <AppText variant="bodyLg" color="textSecondary">{t(challenge.delivery === 'sms' ? 'onboarding.otpPhoneSubtitle' : 'onboarding.otpDevSubtitle', { phone: challenge.phone })}</AppText>

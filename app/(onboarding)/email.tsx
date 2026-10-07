@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useMutation } from '@tanstack/react-query';
 import { z } from 'zod';
-import { AppButton, AppHeader, AppText, InlineNotice, Reveal, Screen, TextField } from '@/components/ui';
+import { OnboardingStepper, AppButton, AppHeader, AppText, InlineNotice, Reveal, Screen, TextField } from '@/components/ui';
 import { spacing } from '@/theme/spacing';
 import { useLocale } from '@/hooks/useLocale';
 import { useDeadline } from '@/hooks/useDeadline';
@@ -63,6 +63,7 @@ export default function EmailScreen() {
   return (
     <Screen keyboardAvoiding>
       <AppHeader />
+      {purpose === 'register' ? <OnboardingStepper current={1} skipVerification email /> : null}
       <Reveal style={{ gap: spacing.sm }}>
         <AppText variant="h1">{t(purpose === 'register' ? 'onboarding.emailTitle' : 'onboarding.emailLoginTitle')}</AppText>
         <AppText variant="bodyLg" color="textSecondary">{t(configReady ? 'onboarding.devEmailSubtitle' : 'common.loading')}</AppText>

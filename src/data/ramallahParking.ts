@@ -64,3 +64,22 @@ export function toParkingZone(location: RamallahParkingLocation): ParkingZone {
 
 export const ramallahParkingZones = ramallahParkingLocations.map(toParkingZone);
 export const ramallahParkingZoneIds = new Set(ramallahParkingZones.map((zone) => zone.id));
+
+/** Keep collected marker styling, but only for locations published by the API. */
+export function publishedCollectedParkingLocations(zones: ParkingZone[]): RamallahParkingLocation[] {
+  const metadata = new Map(ramallahParkingLocations.map(location => [location.id, location]));
+  return zones.flatMap(zone => {
+    const location = metadata.get(zone.id);
+    if (!location) return [];
+    return [{ ...location, code: zone.code, name: zone.name, nameAr: zone.nameAr,
+      location: zone.location, availability: zone.availability, capacity: zone.capacity,
+      parkingAllowed: zone.parkingAllowed ?? location.parkingAllowed,
+      ownership: zone.ownership ?? location.ownership,
+      accessRestriction: zone.accessRestriction, accessRestrictionAr: zone.accessRestrictionAr,
+      supportedModes: zone.supportedModes, defaultMode: zone.defaultMode,
+      supportedEntryMethods: zone.supportedEntryMethods, operatingHours: zone.operatingHours,
+      price: { ...location.price, hourlyRateNis: zone.tariff.hourlyRate / 100 },
+      maxStayMinutes: zone.tariff.maxStayMinutes ?? null,
+    }];
+  });
+}

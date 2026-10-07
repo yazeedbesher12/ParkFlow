@@ -5,6 +5,7 @@ import { checkpoints } from '../roads/service';
 type CheckpointState = Awaited<ReturnType<typeof checkpoints>>[number];
 interface RouteClosure {checkpointId:string;nameAr:string;nameEn:string;status:'closed'|'congested'}
 import { distanceMeters, distanceToPolyline } from '../../utils/geo';
+import { enrichTraffic } from './traffic';
 
 
 /**
@@ -155,10 +156,12 @@ export const routingService = {
 
     const best = scored[0]!;
     const alternatives = scored.slice(1, 1 + (options.maxAlternatives ?? scored.length));
+    const traffic = await enrichTraffic(from, destination);
     return {
       coordinates: best.coordinates,
       distanceMeters: Math.round(best.distance),
       durationSeconds: Math.round(best.duration),
+      ...(traffic ?? {}),
       penaltySeconds: best.penalty,
       closuresOnRoute: best.closures,
       rejected: alternatives.map((route) => ({

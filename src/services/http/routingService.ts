@@ -14,6 +14,12 @@ const normalizeRoute = (route: RouteResult): RouteResult => ({
     ...alternative,
     coordinates: normalizeGeoPoints(alternative.coordinates),
   })),
+  trafficSegments: route.trafficSegments
+    ?.map((segment) => ({
+      ...segment,
+      coordinates: normalizeGeoPoints(segment.coordinates),
+    }))
+    .filter((segment) => segment.coordinates.length >= 2),
   snappedDestination: normalizeGeoPoint(route.snappedDestination),
 });
 

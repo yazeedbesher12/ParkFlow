@@ -9,8 +9,10 @@ import { radius } from '@/theme/radius';
 import { spacing } from '@/theme/spacing';
 import {
   BUSINESS_OFFERS_AVAILABLE,
+  CAR_SERVICE_CATEGORIES,
   MAP_LAYER_AVAILABILITY,
   PRIMARY_MAP_CATEGORIES,
+  type CarServiceCategory,
   type PrimaryMapCategory,
 } from '@/types';
 
@@ -30,9 +32,11 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
   const primaryCategory = useMapLayersStore((state) => state.primaryCategory);
   const roadReportsEnabled = useMapLayersStore((state) => state.roadReportsEnabled);
   const businessOffersEnabled = useMapLayersStore((state) => state.businessOffersEnabled);
+  const carServiceCategory = useMapLayersStore((state) => state.carServiceCategory);
   const setPrimaryCategory = useMapLayersStore((state) => state.setPrimaryCategory);
   const setRoadReportsEnabled = useMapLayersStore((state) => state.setRoadReportsEnabled);
   const setBusinessOffersEnabled = useMapLayersStore((state) => state.setBusinessOffersEnabled);
+  const setCarServiceCategory = useMapLayersStore((state) => state.setCarServiceCategory);
   const resetLayers = useMapLayersStore((state) => state.resetLayers);
 
   const overlayRow = (
@@ -106,6 +110,23 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
               );
             })}
           </View>
+          {primaryCategory === 'car_services' ? (
+            <View style={{ flexDirection: row, flexWrap: 'wrap', gap: spacing.sm }}>
+              {CAR_SERVICE_CATEGORIES.map((category: CarServiceCategory) => {
+                const active = carServiceCategory === category;
+                return (
+                  <AppButton
+                    key={category}
+                    label={t(`carServices.category.${category}`)}
+                    size="sm"
+                    fullWidth={false}
+                    variant={active ? 'primary' : 'secondary'}
+                    onPress={() => setCarServiceCategory(category)}
+                  />
+                );
+              })}
+            </View>
+          ) : null}
         </View>
 
         <View style={{ gap: spacing.xs }}>

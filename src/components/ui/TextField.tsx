@@ -47,6 +47,15 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
   const { colors } = useTheme();
   const { row, textAlign, isRTL } = useLocale();
   const [focused, setFocused] = useState(false);
+  const value = typeof rest.value === 'string' ? rest.value : '';
+  const keyboardType = String(rest.keyboardType ?? '');
+  const forceLtrInput =
+    rest.textContentType === 'emailAddress' ||
+    rest.autoComplete === 'email' ||
+    ['email-address', 'url', 'phone-pad', 'number-pad', 'numeric', 'decimal-pad'].includes(keyboardType);
+  const containsArabic = /[\u0600-\u06ff]/.test(value);
+  const inputTextAlign = forceLtrInput ? 'left' : value ? (containsArabic ? 'right' : 'left') : textAlign;
+  const inputDirection = forceLtrInput ? 'ltr' : value ? (containsArabic ? 'rtl' : 'ltr') : undefined;
 
   const focus = useSharedValue(0);
 
@@ -98,7 +107,8 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             fontWeight: isRTL ? (emphasis === 'strong' ? '700' : '500') : undefined,
             fontSize: emphasis === 'strong' ? 20 : 16,
             letterSpacing: emphasis === 'strong' ? 0.4 : 0,
-            textAlign,
+            textAlign: inputTextAlign,
+            writingDirection: inputDirection,
             // Android adds vertical padding that breaks the centred layout.
             paddingVertical: 0,
           }}

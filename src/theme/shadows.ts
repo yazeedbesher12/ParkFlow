@@ -37,9 +37,9 @@ export const shadow: Record<Level, ViewStyle> = Platform.select({
 
 /** Coloured glow for the primary CTA — used sparingly. */
 export const brandGlow: ViewStyle = Platform.select({
-  ios: { shadowColor: '#1F5A4A', shadowOpacity: 0.10, shadowRadius: 18, shadowOffset: { width: 0, height: 8 } },
+  ios: { shadowColor: '#1F5A4A', shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
   android: { elevation: 2, shadowColor: '#1F5A4A' },
-  default: { boxShadow: '0 8px 22px rgba(31,90,74,0.10)' } as ViewStyle,
+  default: { boxShadow: '0 6px 16px rgba(31,90,74,0.08)' } as ViewStyle,
 }) as ViewStyle;
 
 export type ShadowLevel = Level;

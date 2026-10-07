@@ -4,7 +4,7 @@ import { aggregate } from '../reports/aggregation';
 import { distanceMeters } from '../../utils/geo';
 import type { Prisma } from '@prisma/client';
 import { getActiveTariff } from './tariff';
-export const zoneInclude={operator:true,tariffs:{orderBy:{validFrom:'desc' as const}},operatingHours:true,reports:{where:{reportedAt:{gte:new Date(Date.now()-7200000)}}},snapshots:{orderBy:{recordedAt:'desc' as const},take:1}};
+export const zoneInclude={operator:true,closures:{where:{endsAt:{gt:new Date()}},orderBy:{startsAt:'asc' as const}},tariffs:{orderBy:{validFrom:'desc' as const}},operatingHours:true,reports:{where:{reportedAt:{gte:new Date(Date.now()-7200000)}}},snapshots:{orderBy:{recordedAt:'desc' as const},take:1}};
 
 /** Availability freshness is intentionally conservative: operator feeds are
  * fresh for 15 minutes, aging through 60 minutes, and stale after two hours. */
