@@ -1,6 +1,7 @@
 import type { Services } from './types';
 import { httpEvStationService } from './http/evStationService';
 import { httpCarServiceService } from './http/carServiceService';
+import { httpTourismPlaceService } from './http/tourismPlaceService';
 import { httpAuthService } from './http/authService';
 import { httpVehicleService } from './http/vehicleService';
 import { httpParkingService } from './http/parkingService';
@@ -17,6 +18,7 @@ import { httpTrustService } from './http/trustService';
 export const services: Services = {
   evStations: httpEvStationService,
   carServices: httpCarServiceService,
+  tourismPlaces: httpTourismPlaceService,
   auth: httpAuthService,
   vehicles: httpVehicleService,
   parking: httpParkingService,

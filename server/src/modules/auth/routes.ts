@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { api,route,empty,id,text,money,geo,limit,admins,operators,officers,user,param,actor,key } from '../../apiRegistry';
 import * as authentication from '../../modules/auth/service';
+import { env } from '../../config/env';
 import * as users from '../../modules/users/service';
 import * as vehicles from '../../modules/vehicles/service';
 import * as parking from '../../modules/parking/service';
@@ -13,7 +14,9 @@ import * as notifications from '../../modules/notifications/service';
 import * as admin from '../../modules/admin/service';
 import { routingService } from '../../modules/routing/service';
 const email=z.object({email:z.string().trim().toLowerCase().pipe(z.email().max(254))}).strict();
-route('post','/auth/request-otp',email,(_r,b)=>authentication.requestOtp(b),false);
+route('post','/auth/request-otp',email,(r,b)=>env.NODE_ENV==='development'&&env.DEV_SKIP_EMAIL_OTP
+ ? authentication.devLogin(b,{ip:r.ip,device:r.get('user-agent')?.slice(0,500)})
+ : authentication.requestOtp(b),false);
 route('post','/auth/verify-otp',z.object({challengeId:z.string().uuid(),code:z.string().regex(/^\d{6}$/)}).strict(),(r,b)=>authentication.verifyOtp(b,{ip:r.ip,device:r.get('user-agent')?.slice(0,500)}),false);
 route('post','/auth/dev-login',email,(r,b)=>authentication.devLogin(b,{ip:r.ip,device:r.get('user-agent')?.slice(0,500)}),false);
 route('post','/auth/refresh',z.object({refreshToken:z.string().max(4096)}).strict(),(r,b)=>authentication.refresh(b.refreshToken,{ip:r.ip,device:r.get('user-agent')?.slice(0,500)}),false);

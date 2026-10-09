@@ -82,6 +82,13 @@ interface RouteNeedsComparison {
 }
 
 const routeMinutes = (seconds: number) => Math.max(1, Math.round(seconds / 60));
+const extraDurationLabel = (seconds: number, locale: 'ar' | 'en') => {
+  if (seconds <= 0) return locale === 'ar' ? '+0 د' : '+0 min';
+  if (seconds < 60) return locale === 'ar' ? '+أقل من دقيقة' : '+<1 min';
+  return locale === 'ar'
+    ? `+${Math.round(seconds / 60)} د`
+    : `+${Math.round(seconds / 60)} min`;
+};
 
 interface CompactRoutePanelProps {
   destination: RouteDestination;
@@ -147,6 +154,14 @@ export function CompactRoutePanel({
       ? t('route.issueOnRoute', { type: issueName })
       : t('route.issueAhead', { type: issueName, distance: formatDistance(primaryImpact.distanceAheadMeters) })
     : '';
+  const destinationActionLabel =
+    destination.type === 'parking'
+      ? t('zone.startParking')
+      : destination.type === 'ev_station'
+        ? t('ev.details')
+        : destination.type === 'car_service'
+          ? t('carServices.details')
+          : t('tourism.details');
   const durationDeltaMinutes = suggestedAlternative && originalDurationSeconds !== undefined
     ? Math.round((suggestedAlternative.durationSeconds - originalDurationSeconds) / 60)
     : 0;
@@ -163,11 +178,7 @@ export function CompactRoutePanel({
       })
     : '';
   const differenceSummary = routeNeedsComparison
-    ? t('route.needAwareDifference', {
-        minutes: Math.round(routeNeedsComparison.extraDurationSeconds / 60),
-        distance: formatDistance(routeNeedsComparison.extraDistanceMeters),
-        percent: routeNeedsComparison.extraPercent,
-      })
+    ? `${extraDurationLabel(routeNeedsComparison.extraDurationSeconds, locale)} · +${formatDistance(routeNeedsComparison.extraDistanceMeters)} · +${routeNeedsComparison.extraPercent}%`
     : '';
 
   return (
@@ -230,7 +241,7 @@ export function CompactRoutePanel({
                 <TriangleAlert size={17} color={colors.dangerText} strokeWidth={2.3} />
                 <AppText variant="caption" color="dangerText" weight="bold" style={{ flex: 1 }}>
                   {t('route.needAwareLongWarning', {
-                    minutes: Math.round(routeNeedsComparison.extraDurationSeconds / 60),
+                    minutes: Math.max(1, Math.round(routeNeedsComparison.extraDurationSeconds / 60)),
                     distance: formatDistance(routeNeedsComparison.extraDistanceMeters),
                   })}
                 </AppText>
@@ -334,7 +345,7 @@ export function CompactRoutePanel({
         />
         {destination.type === 'place' ? null : (
           <AppButton
-            label={destination.type === 'parking' ? t('zone.startParking') : t('ev.details')}
+            label={destinationActionLabel}
             size="sm"
             style={{ flex: 1 }}
             onPress={destination.type === 'parking' ? onStartParking : onOpenDestination}

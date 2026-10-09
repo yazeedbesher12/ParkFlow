@@ -11,6 +11,7 @@ export * from './ramallahParking';
 export * from './mapLayers';
 export * from './evStation';
 export * from './carService';
+export * from './tourismPlace';
 export * from './routeDestination';
 export * from './reservation';
 export * from './parkingLayout';

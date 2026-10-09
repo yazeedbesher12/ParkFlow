@@ -7,6 +7,7 @@ import './modules/roads/routes';
 import './modules/roadReports/routes';
 import './modules/evStations/routes';
 import './modules/carServices/routes';
+import './modules/tourismPlaces/routes';
 import './modules/reservations/routes';
 import './modules/violations/routes';
 import './modules/notifications/routes';

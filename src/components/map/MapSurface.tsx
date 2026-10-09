@@ -13,6 +13,7 @@ import { TestLocationMarker } from './TestLocationMarker';
 import { RoadReportMarker } from './RoadReportMarker';
 import { EvStationMarker } from './EvStationMarker';
 import { CarServiceMarker } from './CarServiceMarker';
+import { TourismPlaceMarker } from './TourismPlaceMarker';
 import { NeedStopMarker } from './NeedStopMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { AppText } from '@/components/ui';
@@ -187,6 +188,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     onSelectCheckpoint,
     evStations, selectedEvStationId, onSelectEvStation,
     carServices, activeCarServiceCategory, selectedCarServiceId, onSelectCarService, carServiceAccessibilityLabel,
+    tourismPlaces, selectedTourismPlaceId, onSelectTourismPlace, tourismPlaceMarkerCategory, tourismPlaceAccessibilityLabel,
     roadReports,
     selectedRoadReportId,
     onSelectRoadReport,
@@ -514,6 +516,17 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
               onPress={() => onSelectCarService?.(service)}
               style={{ position: 'absolute', left: x - 24, top: y - 24, width: 48, height: 48, zIndex: service.id === selectedCarServiceId ? 6 : 3 }}>
               <CarServiceMarker category={activeCarServiceCategory} selected={service.id === selectedCarServiceId} />
+            </Pressable>;
+          })}
+          {tourismPlaces?.map((place) => {
+            if (!isValidGeoPoint({ latitude: place.latitude, longitude: place.longitude })) return null;
+            const { x, y } = project(place.latitude, place.longitude);
+            if (x < -50 || y < -50 || x > size.x + 50 || y > size.y + 50) return null;
+            const category = tourismPlaceMarkerCategory?.(place) ?? place.primaryCategory;
+            return <Pressable key={place.id} accessibilityRole="button" accessibilityLabel={tourismPlaceAccessibilityLabel?.(place) ?? place.nameEn} accessibilityState={{ selected: place.id === selectedTourismPlaceId }}
+              onPress={() => onSelectTourismPlace?.(place)}
+              style={{ position: 'absolute', left: x - 24, top: y - 24, width: 48, height: 48, zIndex: place.id === selectedTourismPlaceId ? 6 : 3 }}>
+              <TourismPlaceMarker category={category} selected={place.id === selectedTourismPlaceId} />
             </Pressable>;
           })}
           {roadReports?.map((report) => {

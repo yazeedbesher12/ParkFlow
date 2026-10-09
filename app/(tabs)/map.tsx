@@ -25,11 +25,14 @@ import { EvFiltersSheet } from '@/components/map/EvFiltersSheet';
 import { EvMapStatus } from '@/components/map/EvMapStatus';
 import { CarServiceDetailsSheet } from '@/components/map/CarServiceDetailsSheet';
 import { CarServiceMapStatus } from '@/components/map/CarServiceMapStatus';
+import { TourismPlaceDetailsSheet } from '@/components/map/TourismPlaceDetailsSheet';
+import { TourismPlaceMapStatus } from '@/components/map/TourismPlaceMapStatus';
 import { DestinationSearchBox } from '@/components/map/DestinationSearchBox';
 import { DestinationParkingPanel } from '@/components/map/DestinationParkingPanel';
 import { useEvStations } from '@/hooks/useEvStations';
 import { useCarServices } from '@/hooks/useCarServices';
-import { carServiceDestination, evDestination, parkingDestination, placeDestination, type CarServiceBusiness, type EvChargingStation, type RouteDestination } from '@/types';
+import { useTourismPlaces } from '@/hooks/useTourismPlaces';
+import { carServiceDestination, evDestination, parkingDestination, placeDestination, tourismPlaceDestination, type CarServiceBusiness, type EvChargingStation, type RouteDestination, type TourismPlace, type TourismPlaceCategory } from '@/types';
 
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing, screenPadding } from '@/theme/spacing';
@@ -74,16 +77,24 @@ type RouteNeedsDisplayMode = 'needs' | 'shortest';
 
 /** ~10 m precision keeps GPS jitter from producing new route queries. */
 const round4 = (value: number) => Math.round(value * 10_000) / 10_000;
-const ROUTE_SHARED_TOLERANCE_METERS = 35;
-const MIN_DETOUR_SEGMENT_METERS = 80;
+const ROUTE_SHARED_TOLERANCE_METERS = 25;
+const MIN_DETOUR_SEGMENT_METERS = 45;
+const NEED_STOP_DETOUR_RADIUS_METERS = 90;
 
 function routeLength(points: GeoPoint[]) {
   return points.reduce((total, point, index) =>
     index === 0 ? 0 : total + distanceMeters(points[index - 1]!, point), 0);
 }
 
-function routeDetourSegments(needAware: GeoPoint[], shortest: GeoPoint[]) {
+function routeDetourSegments(
+  needAware: GeoPoint[],
+  shortest: GeoPoint[],
+  needStops: GeoPoint[] = [],
+) {
   if (needAware.length < 2 || shortest.length < 2) return [];
+  const offShortestNeedStops = needStops.filter((stop) =>
+    distanceToPolyline(stop, shortest) > ROUTE_SHARED_TOLERANCE_METERS
+  );
   const groups: GeoPoint[][] = [];
   let current: GeoPoint[] = [];
 
@@ -97,8 +108,11 @@ function routeDetourSegments(needAware: GeoPoint[], shortest: GeoPoint[]) {
     const shared = [start, midpoint, end].every((point) =>
       distanceToPolyline(point, shortest) <= ROUTE_SHARED_TOLERANCE_METERS
     );
+    const servesOffRouteNeed = offShortestNeedStops.some((stop) =>
+      [start, midpoint, end].some((point) => distanceMeters(point, stop) <= NEED_STOP_DETOUR_RADIUS_METERS)
+    );
 
-    if (shared) {
+    if (shared && !servesOffRouteNeed) {
       if (current.length >= 2 && routeLength(current) >= MIN_DETOUR_SEGMENT_METERS) {
         groups.push(current);
       }
@@ -179,6 +193,7 @@ export default function MapScreen() {
 
   const primaryMapCategory = useMapLayersStore((state) => state.primaryCategory);
   const carServiceCategory = useMapLayersStore((state) => state.carServiceCategory);
+  const tourismPlaceCategories = useMapLayersStore((state) => state.tourismPlaceCategories);
   const pendingReservationRouteZoneId = useReservationRouteStore((state) => state.pendingZoneId);
   const storedRouteOrigin = useReservationRouteStore((state) => state.origin);
   const storedRouteOriginMode = useReservationRouteStore((state) => state.originMode);
@@ -186,6 +201,8 @@ export default function MapScreen() {
   const ev = useEvStations(evActive, region);
   const carServicesActive = primaryMapCategory === 'car_services';
   const carServices = useCarServices(carServicesActive, region, carServiceCategory);
+  const tourismPlacesActive = primaryMapCategory === 'tourism_places';
+  const tourismPlaces = useTourismPlaces(tourismPlacesActive, region, tourismPlaceCategories);
   useEffect(() => { if (!evActive) setEvFiltersOpen(false); }, [evActive]);
   const roadReportsEnabled = useMapLayersStore((state) => state.roadReportsEnabled);
   const businessOffersEnabled = useMapLayersStore((state) => state.businessOffersEnabled);
@@ -534,6 +551,7 @@ export default function MapScreen() {
         ? routeDetourSegments(
             normalizeGeoPoints(activeRouteNeedsPlan.route.coordinates),
             normalizeGeoPoints(activeRouteNeedsPlan.baseRoute.coordinates),
+            normalizeGeoPoints(activeRouteNeedsPlan.stops.map((stop) => stop.place.location)),
           )
         : [];
       const alternativeLines = selectedRouteId === 'current'
@@ -725,12 +743,14 @@ export default function MapScreen() {
         setActiveRouteNeedsPlan(undefined);
         useReservationRouteStore.getState().consume();
         ev.select(undefined);
+        carServices.select(undefined);
+        tourismPlaces.select(undefined);
         return true;
       } finally {
         routeStartInFlightRef.current = false;
       }
     },
-    [location, requestLocation, storedRouteOrigin, storedRouteOriginMode, t, testLocation, testLocationMode, ev.select],
+    [location, requestLocation, storedRouteOrigin, storedRouteOriginMode, t, testLocation, testLocationMode, ev.select, carServices.select, tourismPlaces.select],
   );
 
   const changeDestinationQuery = useCallback((value: string) => {
@@ -877,6 +897,25 @@ export default function MapScreen() {
     return `${name}, ${t(`carServices.category.${carServiceCategory}`)}`;
   }, [carServiceCategory, locale, t]);
 
+  const selectTourismPlace = useCallback((place: TourismPlace) => {
+    haptics.select();
+    setSelectedZoneId(undefined);
+    setSelectedReport(undefined);
+    setEntryMenuOpen(false);
+    setReportStep(undefined);
+    setReportLocationPicking(false);
+    tourismPlaces.select(place);
+  }, [tourismPlaces.select]);
+
+  const tourismPlaceMarkerCategory = useCallback((place: TourismPlace): TourismPlaceCategory => (
+    tourismPlaceCategories.find((category) => place.categories.includes(category)) ?? place.primaryCategory
+  ), [tourismPlaceCategories]);
+
+  const tourismPlaceAccessibilityLabel = useCallback((place: TourismPlace) => {
+    const name = locale === 'ar' ? place.nameAr : place.nameEn;
+    return `${name}, ${place.categories.map((category) => t(`tourism.category.${category}`)).join(', ')}`;
+  }, [locale, t]);
+
   const closeRoute = useCallback(() => {
     setRouteTarget(undefined);
     setActiveRouteNeedsPlan(undefined);
@@ -1009,13 +1048,14 @@ export default function MapScreen() {
     selectEvStation(station);
   }, [region.latitudeDelta, region.longitudeDelta, selectEvStation]);
 
-  // Never stack the EV modal with the existing map sheets.
+  // Never stack place detail modals with the existing map sheets.
   useEffect(() => {
     if (selectedZoneId || selectedReport || reportStep || reportLocationPicking || layersSheetOpen || vehicleSheetOpen || codeSheetOpen || evFiltersOpen) {
       ev.select(undefined);
       carServices.select(undefined);
+      tourismPlaces.select(undefined);
     }
-  }, [selectedZoneId, selectedReport, reportStep, reportLocationPicking, layersSheetOpen, vehicleSheetOpen, codeSheetOpen, evFiltersOpen, ev.select, carServices.select]);
+  }, [selectedZoneId, selectedReport, reportStep, reportLocationPicking, layersSheetOpen, vehicleSheetOpen, codeSheetOpen, evFiltersOpen, ev.select, carServices.select, tourismPlaces.select]);
 
   return (
     <View style={{ flex: 1, overflow: 'hidden', backgroundColor: colors.background }}>
@@ -1032,6 +1072,11 @@ export default function MapScreen() {
         selectedCarServiceId={!routeNeedsVisible && carServicesActive ? carServices.selectedServiceId : undefined}
         onSelectCarService={selectCarService}
         carServiceAccessibilityLabel={carServiceAccessibilityLabel}
+        tourismPlaces={!routeNeedsVisible && tourismPlacesActive ? tourismPlaces.places : []}
+        selectedTourismPlaceId={!routeNeedsVisible && tourismPlacesActive ? tourismPlaces.selectedPlaceId : undefined}
+        onSelectTourismPlace={selectTourismPlace}
+        tourismPlaceMarkerCategory={tourismPlaceMarkerCategory}
+        tourismPlaceAccessibilityLabel={tourismPlaceAccessibilityLabel}
         zones={!routeNeedsVisible && primaryMapCategory === 'parking' ? mapZones.map((item) => item.zone) : []}
         selectedZoneId={!routeNeedsVisible && primaryMapCategory === 'parking' ? selectedZoneId ?? routeZone?.id : undefined}
         parkingLocations={!routeNeedsVisible && primaryMapCategory === 'parking' ? ramallahParkingLocations : []}
@@ -1042,6 +1087,7 @@ export default function MapScreen() {
         onPressBackground={() => {
           ev.select(undefined);
           carServices.select(undefined);
+          tourismPlaces.select(undefined);
           setSelectedZoneId(undefined);
           setSelectedReport(undefined);
           setEntryMenuOpen(false);
@@ -1055,7 +1101,7 @@ export default function MapScreen() {
         selectedRoadReportId={!routeNeedsVisible && roadReportsEnabled ? selectedReport?.id : undefined}
         onSelectRoadReport={(report) => {
           setSelectedZoneId(undefined);
-          if (routeTarget?.type !== 'ev_station' && routeTarget?.type !== 'car_service') {
+          if (routeTarget?.type !== 'ev_station' && routeTarget?.type !== 'car_service' && routeTarget?.type !== 'tourism_place') {
             setRouteTarget(undefined);
             setActiveRouteNeedsPlan(undefined);
           }
@@ -1189,6 +1235,9 @@ export default function MapScreen() {
             } : routeTarget.type === 'car_service' ? () => {
               useMapLayersStore.getState().setPrimaryCategory('car_services');
               carServices.select(routeTarget.service);
+            } : routeTarget.type === 'tourism_place' ? () => {
+              useMapLayersStore.getState().setPrimaryCategory('tourism_places');
+              tourismPlaces.select(routeTarget.place);
             } : undefined}
             startDisabled={routeZone?.parkingAllowed === false}
             impacts={activeRouteAssessment?.impacts}
@@ -1266,6 +1315,19 @@ export default function MapScreen() {
             compact={Boolean(routeTarget)}
           />
         ) : null}
+        {tourismPlacesActive && !reportStep && !reportLocationPicking && !selectedReport && !tourismPlaces.selectedPlaceId ? (
+          <TourismPlaceMapStatus
+            loading={tourismPlaces.loading}
+            error={tourismPlaces.error}
+            errorMessage={tourismPlaces.errorMessage}
+            count={tourismPlaces.places.length}
+            places={tourismPlaces.places}
+            truncated={tourismPlaces.truncated}
+            categories={tourismPlaceCategories}
+            retry={tourismPlaces.retry}
+            compact={Boolean(routeTarget)}
+          />
+        ) : null}
       </View>
 
       <VehicleSelectorSheet
@@ -1339,6 +1401,8 @@ export default function MapScreen() {
         onClose={() => ev.select(undefined)} onRoute={(station) => void startRoute(evDestination(station))} />
       <CarServiceDetailsSheet key={carServices.selectedServiceId ?? 'closed-car-service'} service={carServicesActive ? carServices.selectedService : undefined}
         onClose={() => carServices.select(undefined)} onRoute={(service) => void startRoute(carServiceDestination(service))} />
+      <TourismPlaceDetailsSheet key={tourismPlaces.selectedPlaceId ?? 'closed-tourism-place'} place={tourismPlacesActive ? tourismPlaces.selectedPlace : undefined}
+        onClose={() => tourismPlaces.select(undefined)} onRoute={(place) => void startRoute(tourismPlaceDestination(place))} />
       <EvFiltersSheet visible={evActive && evFiltersOpen} onClose={() => setEvFiltersOpen(false)} />
     </View>
   );

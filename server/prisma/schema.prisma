@@ -874,6 +874,13 @@ enum CarServiceCategory {
   tire_service
 }
 
+enum TourismPlaceCategory {
+  historic_landmark
+  museum
+  park_garden
+  visitor_attraction
+}
+
 model EvChargingStation {
   id               String @id @default(uuid())
   name             String @db.VarChar(160)
@@ -953,6 +960,62 @@ model CarServiceCategoryLink {
   @@id([businessId, category])
   @@index([category])
   @@map("car_service_category_links")
+}
+
+model TourismPlace {
+  id                         String                      @id @db.VarChar(120)
+  nameAr                     String                      @db.VarChar(200)
+  nameEn                     String                      @db.VarChar(200)
+  primaryCategory            TourismPlaceCategory
+  descriptionAr              String?                     @db.VarChar(1000)
+  cityAr                     String?                     @db.VarChar(100)
+  regionAr                   String?                     @db.VarChar(120)
+  addressAr                  String?                     @db.VarChar(300)
+  latitude                   Float?
+  longitude                  Float?
+  mapReady                   Boolean                     @default(false)
+  coordinateReferenceSystem  String?                     @db.VarChar(40)
+  coordinateSourceUrl        String?                     @db.VarChar(2048)
+  locationStatus             String                      @db.VarChar(80)
+  coordinateMeaning          String?                     @db.VarChar(120)
+  locationNoteAr             String?                     @db.VarChar(700)
+  navigationEntrance         Json?
+  fieldVerified              Boolean                     @default(false)
+  openingHours               Json?
+  entryFee                   Json?
+  isFreeEntry                Boolean?
+  publicAccessConfirmed      Boolean?
+  phone                      String?                     @db.VarChar(32)
+  email                      String?                     @db.VarChar(254)
+  website                    String?                     @db.VarChar(2048)
+  imageUrl                   String?                     @db.VarChar(2048)
+  sourceImageUrl             String?                     @db.VarChar(2048)
+  imageLicense               String?                     @db.VarChar(300)
+  imageUsageRightsVerified   Boolean                     @default(false)
+  accessibility              Json?
+  toiletsAvailable           Boolean?
+  parkingAvailable           Boolean?
+  nearbyParkingIds           String[]
+  officialSourceId           Int?
+  sources                    Json
+  sourcesCheckedOn           DateTime
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  categories                 TourismPlaceCategoryLink[]
+
+  @@index([latitude, longitude])
+  @@index([mapReady, latitude, longitude])
+  @@map("tourism_places")
+}
+
+model TourismPlaceCategoryLink {
+  placeId  String               @db.VarChar(120)
+  category TourismPlaceCategory
+  place    TourismPlace         @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@id([placeId, category])
+  @@index([category])
+  @@map("tourism_place_category_links")
 }
 
 model OutboxEvent {

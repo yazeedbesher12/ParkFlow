@@ -4,9 +4,11 @@ import { appStorage, STORAGE_KEYS } from '@/services/storage';
 import {
   BUSINESS_OFFERS_AVAILABLE,
   isCarServiceCategory,
+  isTourismPlaceCategory,
   isAvailablePrimaryCategory,
   type CarServiceCategory,
   type PrimaryMapCategory,
+  type TourismPlaceCategory,
 } from '@/types';
 
 interface PersistedMapLayers {
@@ -14,6 +16,7 @@ interface PersistedMapLayers {
   roadReportsEnabled: boolean;
   businessOffersEnabled: boolean;
   carServiceCategory: CarServiceCategory;
+  tourismPlaceCategories: TourismPlaceCategory[];
 }
 
 interface MapLayersState extends PersistedMapLayers {
@@ -21,6 +24,7 @@ interface MapLayersState extends PersistedMapLayers {
   setRoadReportsEnabled: (enabled: boolean) => void;
   setBusinessOffersEnabled: (enabled: boolean) => void;
   setCarServiceCategory: (category: CarServiceCategory) => void;
+  toggleTourismPlaceCategory: (category: TourismPlaceCategory) => void;
   resetLayers: () => void;
 }
 
@@ -29,6 +33,7 @@ const defaults: PersistedMapLayers = {
   roadReportsEnabled: true,
   businessOffersEnabled: false,
   carServiceCategory: 'car_wash',
+  tourismPlaceCategories: ['historic_landmark'],
 };
 
 export const useMapLayersStore = create<MapLayersState>()(
@@ -43,19 +48,24 @@ export const useMapLayersStore = create<MapLayersState>()(
         if (BUSINESS_OFFERS_AVAILABLE) set({ businessOffersEnabled });
       },
       setCarServiceCategory: (carServiceCategory) => set({ carServiceCategory }),
+      toggleTourismPlaceCategory: (category) => set({ tourismPlaceCategories: [category] }),
       resetLayers: () => set(defaults),
     }),
     {
       name: STORAGE_KEYS.mapLayers,
       storage: createJSONStorage(() => appStorage),
-      partialize: ({ primaryCategory, roadReportsEnabled, businessOffersEnabled, carServiceCategory }) => ({
+      partialize: ({ primaryCategory, roadReportsEnabled, businessOffersEnabled, carServiceCategory, tourismPlaceCategories }) => ({
         primaryCategory,
         roadReportsEnabled,
         businessOffersEnabled,
         carServiceCategory,
+        tourismPlaceCategories,
       }),
       merge: (persisted, current) => {
         const stored = persisted as Partial<PersistedMapLayers>;
+        const storedTourismCategories = Array.isArray(stored.tourismPlaceCategories)
+          ? stored.tourismPlaceCategories.filter(isTourismPlaceCategory).slice(0, 1)
+          : [];
         return {
           ...current,
           primaryCategory: isAvailablePrimaryCategory(stored.primaryCategory)
@@ -68,6 +78,7 @@ export const useMapLayersStore = create<MapLayersState>()(
           carServiceCategory: isCarServiceCategory(stored.carServiceCategory)
             ? stored.carServiceCategory
             : defaults.carServiceCategory,
+          tourismPlaceCategories: storedTourismCategories.length ? storedTourismCategories : defaults.tourismPlaceCategories,
         };
       },
     },

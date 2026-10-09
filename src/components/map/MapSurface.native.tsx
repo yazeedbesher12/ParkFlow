@@ -12,6 +12,7 @@ import { TestLocationMarker } from './TestLocationMarker';
 import { RoadReportMarker } from './RoadReportMarker';
 import { EvStationMarker } from './EvStationMarker';
 import { CarServiceMarker } from './CarServiceMarker';
+import { TourismPlaceMarker } from './TourismPlaceMarker';
 import { NeedStopMarker } from './NeedStopMarker';
 import type { MapSurfaceHandle, MapSurfaceProps } from './types';
 import { AppText } from '@/components/ui';
@@ -53,6 +54,7 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
     onSelectCheckpoint,
     evStations, selectedEvStationId, onSelectEvStation,
     carServices, activeCarServiceCategory, selectedCarServiceId, onSelectCarService, carServiceAccessibilityLabel,
+    tourismPlaces, selectedTourismPlaceId, onSelectTourismPlace, tourismPlaceMarkerCategory, tourismPlaceAccessibilityLabel,
     roadReports,
     selectedRoadReportId,
     onSelectRoadReport,
@@ -177,6 +179,13 @@ export const MapSurface = forwardRef<MapSurfaceHandle, MapSurfaceProps>(function
             accessibilityLabel={carServiceAccessibilityLabel?.(service) ?? service.nameEn} tracksViewChanges={false} zIndex={service.id === selectedCarServiceId ? 60 : 30}
             onPress={(event) => { event.stopPropagation(); onSelectCarService?.(service); }}>
             <CarServiceMarker category={activeCarServiceCategory} selected={service.id === selectedCarServiceId} />
+          </Marker>
+        ) : null)}
+        {tourismPlaces?.map((place) => isValidGeoPoint({ latitude: place.latitude, longitude: place.longitude }) ? (
+          <Marker key={`${place.id}-${place.id === selectedTourismPlaceId}`} coordinate={{ latitude: place.latitude, longitude: place.longitude }} anchor={{ x: 0.5, y: 0.5 }}
+            accessibilityLabel={tourismPlaceAccessibilityLabel?.(place) ?? place.nameEn} tracksViewChanges={false} zIndex={place.id === selectedTourismPlaceId ? 60 : 30}
+            onPress={(event) => { event.stopPropagation(); onSelectTourismPlace?.(place); }}>
+            <TourismPlaceMarker category={tourismPlaceMarkerCategory?.(place) ?? place.primaryCategory} selected={place.id === selectedTourismPlaceId} />
           </Marker>
         ) : null)}
         {roadReports?.map((report) => (

@@ -10,6 +10,8 @@ import type {
   RouteTrafficSegment,
   CarServiceBusiness,
   CarServiceCategory,
+  TourismPlace,
+  TourismPlaceCategory,
 } from '@/types';
 
 export interface MapCheckpoint {
@@ -55,6 +57,11 @@ export interface MapSurfaceProps {
   selectedCarServiceId?: string;
   onSelectCarService?: (service: CarServiceBusiness) => void;
   carServiceAccessibilityLabel?: (service: CarServiceBusiness) => string;
+  tourismPlaces?: TourismPlace[];
+  selectedTourismPlaceId?: string;
+  onSelectTourismPlace?: (place: TourismPlace) => void;
+  tourismPlaceMarkerCategory?: (place: TourismPlace) => TourismPlaceCategory;
+  tourismPlaceAccessibilityLabel?: (place: TourismPlace) => string;
   evStations?: import('@/types').EvChargingStation[];
   selectedEvStationId?: string;
   onSelectEvStation?: (station: import('@/types').EvChargingStation) => void;

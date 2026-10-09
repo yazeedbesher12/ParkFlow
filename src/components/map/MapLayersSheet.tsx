@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BadgePercent, BatteryCharging, CircleParking, LifeBuoy, TriangleAlert, Wrench } from 'lucide-react-native';
+import { BadgePercent, BatteryCharging, CircleParking, Landmark, LifeBuoy, TriangleAlert, Wrench } from 'lucide-react-native';
 import { Switch, View } from 'react-native';
 import { AppButton, AppText, BottomSheet, PressableScale } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
@@ -12,8 +12,10 @@ import {
   CAR_SERVICE_CATEGORIES,
   MAP_LAYER_AVAILABILITY,
   PRIMARY_MAP_CATEGORIES,
+  TOURISM_PLACE_CATEGORIES,
   type CarServiceCategory,
   type PrimaryMapCategory,
+  type TourismPlaceCategory,
 } from '@/types';
 
 const categoryIcon = (category: PrimaryMapCategory, color: string): ReactNode => {
@@ -22,6 +24,7 @@ const categoryIcon = (category: PrimaryMapCategory, color: string): ReactNode =>
     case 'parking': return <CircleParking {...props} />;
     case 'ev_charging': return <BatteryCharging {...props} />;
     case 'car_services': return <Wrench {...props} />;
+    case 'tourism_places': return <Landmark {...props} />;
     case 'roadside_help': return <LifeBuoy {...props} />;
   }
 };
@@ -33,10 +36,12 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
   const roadReportsEnabled = useMapLayersStore((state) => state.roadReportsEnabled);
   const businessOffersEnabled = useMapLayersStore((state) => state.businessOffersEnabled);
   const carServiceCategory = useMapLayersStore((state) => state.carServiceCategory);
+  const tourismPlaceCategories = useMapLayersStore((state) => state.tourismPlaceCategories);
   const setPrimaryCategory = useMapLayersStore((state) => state.setPrimaryCategory);
   const setRoadReportsEnabled = useMapLayersStore((state) => state.setRoadReportsEnabled);
   const setBusinessOffersEnabled = useMapLayersStore((state) => state.setBusinessOffersEnabled);
   const setCarServiceCategory = useMapLayersStore((state) => state.setCarServiceCategory);
+  const toggleTourismPlaceCategory = useMapLayersStore((state) => state.toggleTourismPlaceCategory);
   const resetLayers = useMapLayersStore((state) => state.resetLayers);
 
   const overlayRow = (
@@ -122,6 +127,23 @@ export function MapLayersSheet({ visible, onClose }: { visible: boolean; onClose
                     fullWidth={false}
                     variant={active ? 'primary' : 'secondary'}
                     onPress={() => setCarServiceCategory(category)}
+                  />
+                );
+              })}
+            </View>
+          ) : null}
+          {primaryCategory === 'tourism_places' ? (
+            <View style={{ flexDirection: row, flexWrap: 'wrap', gap: spacing.sm }}>
+              {TOURISM_PLACE_CATEGORIES.map((category: TourismPlaceCategory) => {
+                const active = tourismPlaceCategories.includes(category);
+                return (
+                  <AppButton
+                    key={category}
+                    label={t(`tourism.category.${category}`)}
+                    size="sm"
+                    fullWidth={false}
+                    variant={active ? 'primary' : 'secondary'}
+                    onPress={() => toggleTourismPlaceCategory(category)}
                   />
                 );
               })}

@@ -21,7 +21,7 @@ export function createApp(){const app=express();app.disable('x-powered-by');
  app.get('/health',(_req,res)=>res.json({status:'ok'}));app.get('/ready',async(_req,res)=>{try{await db.$queryRaw`SELECT 1`;await redis.ping();res.json({status:'ready'});}catch{res.status(503).json({status:'unavailable'});}});
  const limiter=(prefix:string,limit:number,windowMs:number)=>rateLimit({windowMs,limit,standardHeaders:'draft-8',legacyHeaders:false,store:new RedisStore({prefix,sendCommand:(...args:string[])=>redis.call(...args as [string,...string[]]) as Promise<never>}),message:{error:{code:'RATE_LIMITED',message:'Too many requests. Try again later.'}}});
  app.use('/api/v1',limiter('rate:api:',300,60000));
- app.use('/api/v1/auth/request-otp',limiter('rate:otp:',10,600000));
+ if(!(env.NODE_ENV==='development'&&env.DEV_SKIP_EMAIL_OTP)) app.use('/api/v1/auth/request-otp',limiter('rate:otp:',10,600000));
  app.use('/api/v1/auth/verify-otp',limiter('rate:verify:',30,600000));
  app.use('/api/v1/auth/dev-login',limiter('rate:dev-login:',30,600000));
  app.post('/api/v1/webhooks/payments/:provider',express.raw({type:'application/json',limit:'64kb'}),async(req,res,next)=>{try{res.json(await webhook(String(req.params.provider),req.body,req.get('X-Payment-Signature')??''));}catch(e){next(e);}});

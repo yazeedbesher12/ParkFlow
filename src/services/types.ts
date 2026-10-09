@@ -44,7 +44,7 @@ import type {
  */
 
 export interface AuthService {
-  requestOtp(input: { email: string }): Promise<OtpChallenge>;
+  requestOtp(input: { email: string }): Promise<OtpChallenge | AuthResult>;
   devLogin(input: { email: string }): Promise<AuthResult>;
   verifyOtp(input: {
     challengeId: string;
@@ -254,6 +254,7 @@ export interface TrustService {
 export interface Services {
   evStations: import('../types/evStation').EvStationApi;
   carServices: import('../types/carService').CarServiceApi;
+  tourismPlaces: import('../types/tourismPlace').TourismPlaceApi;
   auth: AuthService;
   vehicles: VehicleService;
   parking: ParkingService;
