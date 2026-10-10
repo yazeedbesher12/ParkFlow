@@ -49,6 +49,7 @@ export default function VehiclesScreen() {
     <Screen layout="fixed" safeBottom={false}>
       <View style={{ paddingBottom: spacing.md }}>
         <AppText variant="h1">{t('vehicle.myVehicles')}</AppText>
+        <AppButton label={t('warning.entry')} size="sm" variant="secondary" onPress={() => router.push('/vehicles/warning-check')} />
       </View>
 
       {isPending ? (

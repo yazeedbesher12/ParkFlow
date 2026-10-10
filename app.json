@@ -63,13 +63,14 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "ParkFlow uses the camera to scan the QR code on parking zone signs."
+          "cameraPermission": "ParkFlow uses the camera to scan parking QR codes and photograph dashboard warning symbols."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "ParkFlow lets you attach photos from your library to a violation appeal."
+          "photosPermission": "ParkFlow lets you choose photos for violation appeals and dashboard warning checks.",
+          "cameraPermission": "ParkFlow uses the camera to scan parking QR codes and photograph dashboard warning symbols."
         }
       ]
     ],

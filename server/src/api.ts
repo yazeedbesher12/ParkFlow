@@ -1,6 +1,7 @@
 export { api,paths } from './apiRegistry';
 import './modules/auth/routes';
 import './modules/vehicles/routes';
+import './modules/vehicleWarnings/routes';
 import './modules/parking/routes';
 import './modules/wallet/routes';
 import './modules/roads/routes';

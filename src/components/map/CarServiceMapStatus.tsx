@@ -1,5 +1,6 @@
 import { ActivityIndicator, View } from 'react-native';
-import { AppButton, AppText } from '@/components/ui';
+import { useRouter } from 'expo-router';
+import { AppButton, AppText, Card } from '@/components/ui';
 import { useLocale } from '@/hooks/useLocale';
 import { useTheme } from '@/theme/ThemeProvider';
 import type { CarServiceBusiness, CarServiceCategory } from '@/types';
@@ -26,10 +27,15 @@ export function CarServiceMapStatus({
   compact?: boolean;
 }) {
   const { locale, t, row } = useLocale();
+  const router = useRouter();
   const { colors } = useTheme();
   const preview = services.slice(0, 4);
   const remaining = Math.max(0, count - preview.length);
   return <View style={{ padding: 12, gap: 8, borderRadius: 20, backgroundColor: colors.surface }}>
+    <Card padding="sm" tone="brand" accessibilityLabel={t('warning.entry')} onPress={() => router.push('/vehicles/warning-check')}>
+      <AppText variant="title">{t('warning.entry')}</AppText>
+      {!compact ? <AppText variant="caption">{t('warning.entryBody')}</AppText> : null}
+    </Card>
     <View style={{ flexDirection: row, alignItems: 'center', gap: 8 }}>
       {loading ? <ActivityIndicator size="small" color={colors.brand} /> : null}
       <AppText variant="caption" style={{ flex: 1 }}>

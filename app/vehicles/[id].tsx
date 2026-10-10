@@ -115,6 +115,7 @@ export default function VehicleDetailScreen() {
       <AppHeader title={t('vehicle.details')} />
 
       <View style={{ gap: spacing.xl }}>
+        <AppButton label={t('warning.entry')} variant="secondary" onPress={() => router.push({ pathname: '/vehicles/warning-check', params: { vehicleId: id } })} />
         {/* ---- Identity ------------------------------------------------ */}
         <Card padding="xl" style={{ alignItems: 'center', gap: spacing.md }}>
           <View

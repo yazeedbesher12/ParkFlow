@@ -25,6 +25,8 @@ import { EvFiltersSheet } from '@/components/map/EvFiltersSheet';
 import { EvMapStatus } from '@/components/map/EvMapStatus';
 import { CarServiceDetailsSheet } from '@/components/map/CarServiceDetailsSheet';
 import { CarServiceMapStatus } from '@/components/map/CarServiceMapStatus';
+import { useWarningServiceNavigationStore } from '@/store/warningServiceNavigationStore';
+import { useCarServicesStore } from '@/store/carServicesStore';
 import { TourismPlaceDetailsSheet } from '@/components/map/TourismPlaceDetailsSheet';
 import { TourismPlaceMapStatus } from '@/components/map/TourismPlaceMapStatus';
 import { DestinationSearchBox } from '@/components/map/DestinationSearchBox';
@@ -187,6 +189,25 @@ export default function MapScreen() {
   useFocusEffect(
     useCallback(() => {
       setMapFocused(true);
+      const navigation = useWarningServiceNavigationStore.getState();
+      if (navigation.pending) {
+        const service = navigation.pending;
+        const next = { latitude: service.latitude, longitude: service.longitude, latitudeDelta: 0.025, longitudeDelta: 0.025 };
+        setRegion(next);
+        mapRef.current?.animateToRegion(next, 450);
+        useCarServicesStore.getState().select(service);
+        setSelectedZoneId(undefined);
+        setSelectedReport(undefined);
+        setRouteTarget(undefined);
+        setReportStep(undefined);
+        setReportLocationPicking(false);
+        setLayersSheetOpen(false);
+        setVehicleSheetOpen(false);
+        setCodeSheetOpen(false);
+        setEvFiltersOpen(false);
+        setEntryMenuOpen(false);
+        navigation.clear();
+      }
       return () => setMapFocused(false);
     }, []),
   );
