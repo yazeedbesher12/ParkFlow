@@ -44,7 +44,7 @@ import type {
  */
 
 export interface AuthService {
-  requestOtp(input: { email: string }): Promise<OtpChallenge | AuthResult>;
+  requestOtp(input: { email: string }): Promise<OtpChallenge>;
   devLogin(input: { email: string }): Promise<AuthResult>;
   verifyOtp(input: {
     challengeId: string;

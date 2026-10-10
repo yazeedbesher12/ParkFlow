@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
+import { Reveal } from '@/components/ui';
 import { MapSurface } from '@/components/map/MapSurface';
 import type { MapCheckpoint, MapRoute, MapSurfaceHandle } from '@/components/map/types';
 import { MapTopBar } from '@/components/map/MapTopBar';
@@ -1124,20 +1125,22 @@ export default function MapScreen() {
           gap: spacing.sm,
         }}
       >
-        <MapTopBar
-          vehicle={selected}
-          unreadCount={unreadCount}
-          onOpenVehicles={() => setVehicleSheetOpen(true)}
-          onOpenNotifications={() => router.push('/notifications')}
-          onOpenReport={!reportLocationPicking && !reportStep ? () => {
-            setSelectedZoneId(undefined);
-            setSelectedReport(undefined);
-            setEntryMenuOpen(false);
-            setReportDraft({});
-            createReport.reset();
-            setReportStep('type');
-          } : undefined}
-        />
+        <Reveal offset={8}>
+          <MapTopBar
+            vehicle={selected}
+            unreadCount={unreadCount}
+            onOpenVehicles={() => setVehicleSheetOpen(true)}
+            onOpenNotifications={() => router.push('/notifications')}
+            onOpenReport={!reportLocationPicking && !reportStep ? () => {
+              setSelectedZoneId(undefined);
+              setSelectedReport(undefined);
+              setEntryMenuOpen(false);
+              setReportDraft({});
+              createReport.reset();
+              setReportStep('type');
+            } : undefined}
+          />
+        </Reveal>
         {!reportLocationPicking && !reportStep && !selectedReport ? (
           <DestinationSearchBox
             value={destinationQuery}
@@ -1197,27 +1200,32 @@ export default function MapScreen() {
         }}
       >
         {!reportLocationPicking && !reportStep && !selectedReport && bannerSession ? (
-          <ActiveSessionBanner
-            session={bannerSession}
-            vehicle={bannerVehicle}
-            extraCount={activeSessions.length - 1}
-            onPress={() => router.push(`/parking/active/${bannerSession.id}`)}
-          />
+          <Reveal offset={10}>
+            <ActiveSessionBanner
+              session={bannerSession}
+              vehicle={bannerVehicle}
+              extraCount={activeSessions.length - 1}
+              onPress={() => router.push(`/parking/active/${bannerSession.id}`)}
+            />
+          </Reveal>
         ) : null}
 
         {!reportLocationPicking && !reportStep && !selectedReport && __DEV__ && process.env.EXPO_PUBLIC_SHOW_TEST_LOCATION === 'true' ? (
-          <View style={{ alignItems: 'flex-end' }}>
+          <Reveal offset={10} style={{ alignItems: 'flex-end' }}>
             <TestLocationControl
               enabled={testLocationMode}
               hasLocation={Boolean(testLocation)}
               onToggle={toggleTestLocation}
             />
-          </View>
+          </Reveal>
         ) : null}
 
         {reportLocationPicking ? (
-          <RoadReportLocationPanel onCancel={cancelReport} onContinue={() => { setReportLocationPicking(false); setReportStep('details'); }} />
+          <Reveal key="rp-location" offset={12}>
+            <RoadReportLocationPanel onCancel={cancelReport} onContinue={() => { setReportLocationPicking(false); setReportStep('details'); }} />
+          </Reveal>
         ) : !reportStep && !selectedReport && routeTarget ? (
+          <Reveal key="rp-route" offset={12}>
           <CompactRoutePanel
             destination={routeTarget}
             route={displayedRoute}
@@ -1269,7 +1277,9 @@ export default function MapScreen() {
             }}
             showNoAlternative={Boolean(route?.source === 'osrm' && activeRouteAssessment?.impacts.length && !routeAssessment?.recommended && selectedRouteId === 'current')}
           />
+          </Reveal>
         ) : !reportStep && !selectedReport && selectedDestination && primaryMapCategory === 'parking' ? (
+          <Reveal key="rp-destination" offset={12}>
           <DestinationParkingPanel
             destinationName={selectedDestination.name}
             recommendations={destinationRecommendations}
@@ -1290,19 +1300,25 @@ export default function MapScreen() {
             onBestParkingForNeeds={showBestParkingForNeeds}
             onSelect={(item) => void startRoute(parkingDestination(item.zone))}
           />
+          </Reveal>
         ) : !reportStep && !selectedReport && primaryMapCategory === 'parking' ? (
+          <Reveal key="rp-nearby" offset={12}>
           <NearbyParkingPanel
             zones={nearbyZones}
             expanded={nearbyExpanded}
             onExpandedChange={setNearbyExpanded}
             onSelectZone={focusZone}
           />
+          </Reveal>
         ) : null}
         {evActive && !reportStep && !reportLocationPicking && !selectedReport && !ev.selectedStationId ? (
+          <Reveal offset={12}>
           <EvMapStatus loading={ev.loading} error={ev.error} count={ev.stations.length} truncated={ev.truncated} filters={ev.filters}
             stations={ev.stations} retry={ev.retry} onFilters={() => setEvFiltersOpen(true)} onSelectStation={focusEvStation} compact={Boolean(routeTarget)} />
+          </Reveal>
         ) : null}
         {carServicesActive && !reportStep && !reportLocationPicking && !selectedReport && !carServices.selectedServiceId ? (
+          <Reveal offset={12}>
           <CarServiceMapStatus
             loading={carServices.loading}
             error={carServices.error}
@@ -1314,8 +1330,10 @@ export default function MapScreen() {
             retry={carServices.retry}
             compact={Boolean(routeTarget)}
           />
+          </Reveal>
         ) : null}
         {tourismPlacesActive && !reportStep && !reportLocationPicking && !selectedReport && !tourismPlaces.selectedPlaceId ? (
+          <Reveal offset={12}>
           <TourismPlaceMapStatus
             loading={tourismPlaces.loading}
             error={tourismPlaces.error}
@@ -1327,6 +1345,7 @@ export default function MapScreen() {
             retry={tourismPlaces.retry}
             compact={Boolean(routeTarget)}
           />
+          </Reveal>
         ) : null}
       </View>
 

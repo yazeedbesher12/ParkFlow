@@ -1,12 +1,42 @@
 import dataset from '../../../ramallah_tourism_places.json';
-import type { TourismPlace, TourismPlaceApi, TourismPlaceCategory } from '@/types';
+import type { TourismPlace, TourismPlaceApi, TourismPlaceCategory, TourismPlaceSource } from '@/types';
 
-type RawTourismPlace = Omit<TourismPlace, 'latitude' | 'longitude' | 'createdAt' | 'updatedAt' | 'sourcesCheckedOn'> & {
+/**
+ * Shape of each entry in the dataset file. It mirrors `TourismPlace` but uses
+ * `null` (JSON has no `undefined`) for every field the source data may omit.
+ */
+interface RawTourismPlace {
+  id: string;
+  nameAr: string;
+  nameEn: string;
+  primaryCategory: TourismPlaceCategory;
   categories: TourismPlaceCategory[];
+  descriptionAr: string | null;
+  cityAr: string | null;
+  regionAr: string | null;
+  addressAr: string | null;
   latitude: number | null;
   longitude: number | null;
+  mapReady: boolean;
+  coordinateReferenceSystem: string | null;
+  coordinateSourceUrl: string | null;
+  locationStatus: string;
+  coordinateMeaning: string | null;
+  locationNoteAr: string | null;
+  fieldVerified: boolean;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  imageUrl: string | null;
+  imageLicense: string | null;
+  imageUsageRightsVerified: boolean;
+  nearbyParkingIds: string[];
+  officialSourceId: number | null;
+  sources: TourismPlaceSource[];
   sourcesCheckedOn: string;
-};
+}
+
+const undef = <T>(value: T | null): T | undefined => value ?? undefined;
 
 const isValidCoordinatePair = (place: RawTourismPlace) =>
   typeof place.latitude === 'number' &&
@@ -18,16 +48,43 @@ const isValidCoordinatePair = (place: RawTourismPlace) =>
   place.longitude >= -180 &&
   place.longitude <= 180;
 
-const places = (dataset.places as RawTourismPlace[])
+const places: TourismPlace[] = (dataset.places as unknown as RawTourismPlace[])
   .filter((place) => place.mapReady && isValidCoordinatePair(place))
-  .map((place): TourismPlace => ({
-    ...place,
-    latitude: place.latitude!,
-    longitude: place.longitude!,
-    sourcesCheckedOn: `${place.sourcesCheckedOn}T00:00:00.000Z`,
-    createdAt: `${place.sourcesCheckedOn}T00:00:00.000Z`,
-    updatedAt: `${place.sourcesCheckedOn}T00:00:00.000Z`,
-  }));
+  .map((place) => {
+    const checkedOnIso = `${place.sourcesCheckedOn}T00:00:00.000Z`;
+    return {
+      id: place.id,
+      nameAr: place.nameAr,
+      nameEn: place.nameEn,
+      primaryCategory: place.primaryCategory,
+      categories: place.categories,
+      descriptionAr: undef(place.descriptionAr),
+      cityAr: undef(place.cityAr),
+      regionAr: undef(place.regionAr),
+      addressAr: undef(place.addressAr),
+      latitude: place.latitude!,
+      longitude: place.longitude!,
+      mapReady: place.mapReady,
+      coordinateReferenceSystem: undef(place.coordinateReferenceSystem),
+      coordinateSourceUrl: undef(place.coordinateSourceUrl),
+      locationStatus: place.locationStatus,
+      coordinateMeaning: undef(place.coordinateMeaning),
+      locationNoteAr: undef(place.locationNoteAr),
+      fieldVerified: place.fieldVerified,
+      phone: undef(place.phone),
+      email: undef(place.email),
+      website: undef(place.website),
+      imageUrl: place.imageUrl,
+      imageLicense: undef(place.imageLicense),
+      imageUsageRightsVerified: place.imageUsageRightsVerified,
+      nearbyParkingIds: place.nearbyParkingIds,
+      officialSourceId: undef(place.officialSourceId),
+      sources: place.sources,
+      sourcesCheckedOn: checkedOnIso,
+      createdAt: checkedOnIso,
+      updatedAt: checkedOnIso,
+    };
+  });
 
 export const httpTourismPlaceService: TourismPlaceApi = {
   list: async (bounds, filters) => {
