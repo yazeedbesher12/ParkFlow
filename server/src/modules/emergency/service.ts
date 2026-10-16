@@ -1,6 +1,7 @@
 import type { CrashEventOutcome } from '@prisma/client';
 import { db } from '../../database/client';
 import { env } from '../../config/env';
+import { idempotent } from '../../utils/idempotency';
 
 /**
  * Emergency calling stays off until EMERGENCY_CALL_NUMBER is set, so the phone
@@ -26,16 +27,16 @@ export interface CrashEventInput {
 }
 
 /** Keeps a record of every detection, including the ones the driver cancelled. */
-export async function recordCrash(userId: string, input: CrashEventInput) {
+export async function recordCrash(userId: string, input: CrashEventInput, key: string) {
   const { callNumber } = config();
-  return db.crashEvent.create({
+  return idempotent(userId, 'crash-event', key, input, tx => tx.crashEvent.create({
     data: {
       userId,
       ...input,
       detectedAt: new Date(input.detectedAt),
       calledNumber: input.outcome === 'called' || input.outcome === 'call_failed' ? callNumber : null,
     },
-  });
+  }));
 }
 
 export async function recentCrashes(userId: string) {

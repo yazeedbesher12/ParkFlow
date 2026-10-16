@@ -1,0 +1,22 @@
+{
+  "name": "@parkflow/design",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./appConfigColors": "./src/appConfigColors.ts",
+    "./colors": "./src/colors.ts",
+    "./motion": "./src/motion.ts",
+    "./radius": "./src/radius.ts",
+    "./shadows": "./src/shadows.ts",
+    "./spacing": "./src/spacing.ts",
+    "./typography": "./src/typography.ts",
+    "./zIndex": "./src/zIndex.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react-native": "0.86.3",
+    "react-native-reanimated": "4.5.1"
+  }
+}

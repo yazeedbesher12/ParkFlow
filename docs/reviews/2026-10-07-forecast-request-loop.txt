@@ -1,0 +1,12 @@
+Parking layout HTTP 429 — 2026-10-07
+
+Observed cause
+Sanitized backend logs from an eight-minute window contained at least 1,332 forecast requests (392 succeeded and 940 returned429), while layout requests were also rejected. ZoneForecast created a new ISO arrival timestamp in its default parameter on every render and used it in the React Query key. Query result/error notifications therefore created another query and another request, exhausting the shared API limit.
+
+Fix
+The default query key is now stable: ['forecast', zoneId, 'now']. The actual current ISO time is calculated inside queryFn only when a fetch is needed. Explicit arrival selections remain part of the key. Server request/OTP limits, Redis counters, authentication, and SMS configuration were not changed. ErrorState now displays localized temporary-limit copy for429.
+
+Verification
+Genuine persistent React mounts with the real QueryClient reproduced3 failing cases before the fix;4 cases passed after it. Coverage: successful-response rerender, rejected-response rerender, explicit arrival changes, and intentional refresh with a fresh current time and one default cache entry. Only transport/native presentation/locale are stubbed.
+Final client suite:13/13 passed. Client TypeScript check passed. Frontend HTTP200 and API readiness confirmed. React test renderer19.2.3 is pinned as a dev dependency; its deprecation warning is known.
+The separate browser test had no signed-in session and was redirected to welcome, so authenticated visual verification is not claimed. Existing open tabs may need one reload to load the fix and retry their cached error; the normal API window expires after60seconds.

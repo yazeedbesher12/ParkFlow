@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 const prismaCli=resolve(__dirname,'../../node_modules/prisma/build/index.js');
 const children=new Map<ChildProcess,string>();
 let stopping=false,exitCode=0;
-function run(name:string,script:string,args:string[]=[]){const child=spawn(process.execPath,[script,...args],{stdio:'inherit',env:process.env});children.set(child,name);return child;}
+function run(name:string,script:string,args:string[]=[]){const child=spawn(process.execPath,[script,...args],{stdio:'inherit',env:process.env});children.set(child,name);child.once('error',()=>{children.delete(child);console.error(`[start] ${name} could not start; stopping the container`);stop(1);});return child;}
 function stop(code:number){
  if(stopping)return;stopping=true;exitCode=code;
  for(const child of children.keys())child.kill('SIGTERM');

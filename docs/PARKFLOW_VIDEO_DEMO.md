@@ -2,8 +2,8 @@
 
 Execution status: **NOT RUN**. This script is based on static code review only. No tests, builds, migrations, or app code changes were executed.
 
-Target length: **4:45 minutes**  
-Format: vertical mobile screen recording, fast cuts, Arabic voiceover, Arabic captions with short English technical labels.  
+Target length: **4:45 minutes**<br>
+Format: vertical mobile screen recording, fast cuts, Arabic voiceover, Arabic captions with short English technical labels.<br>
 Story: one driver opens ParkFlow, plans a trip with needs, avoids traffic, reserves/scans parking, pays, starts and stops a parking session, then reviews proof screens.
 
 Do not claim the following as complete production features in the video:

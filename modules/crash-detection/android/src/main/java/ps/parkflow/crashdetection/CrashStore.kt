@@ -22,6 +22,14 @@ object CrashStore {
   private fun prefs(context: Context): SharedPreferences =
     context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+  /**
+   * Config changes and account invalidation share this monitor with the final
+   * owner check and native call dispatch. Keep the platform launch inside the
+   * operation: checking under the lock and launching afterwards is not atomic.
+   */
+  fun <T> withExecutionFence(operation: () -> T): T = synchronized(this) { operation() }
+
+  @Synchronized
   fun saveConfig(context: Context, options: Map<String, Any?>) {
     val editor = prefs(context).edit().putBoolean("enabled", true)
     for ((key, value) in options) {
@@ -35,8 +43,26 @@ object CrashStore {
     editor.apply()
   }
 
+  @Synchronized
   fun setEnabled(context: Context, enabled: Boolean) = prefs(context).edit().putBoolean("enabled", enabled).apply()
   fun isEnabled(context: Context) = prefs(context).getBoolean("enabled", false)
+
+  fun ownerUserId(context: Context): String? = prefs(context).getString("userId", null)?.takeIf { it.isNotBlank() }
+
+  @Synchronized
+  fun clearAccount(context: Context, userId: String) {
+    val stored = prefs(context)
+    val events = JSONArray(stored.getString(EVENTS, "[]"))
+    val remaining = JSONArray()
+    for (i in 0 until events.length()) {
+      val event = events.getJSONObject(i)
+      // Unowned events from old builds cannot safely be attributed.
+      if (event.optString("userId").isNotBlank() && event.optString("userId") != userId) remaining.put(event)
+    }
+    val editor = stored.edit().putString(EVENTS, remaining.toString())
+    if (ownerUserId(context) == userId) editor.putBoolean("enabled", false).remove("userId")
+    editor.apply()
+  }
 
   fun callNumber(context: Context): String? = prefs(context).getString("callNumber", null)?.takeIf { it.isNotBlank() }
   fun countdownSeconds(context: Context): Int = prefs(context).getInt("countdownSeconds", 15).coerceIn(5, 60)
@@ -47,9 +73,10 @@ object CrashStore {
     prefs(context).getString("text.$key", null) ?: fallback
 
   @Synchronized
-  fun recordEvent(context: Context, detection: CrashDetection, detectedAtMs: Long, latitude: Double?, longitude: Double?, outcome: String) {
+  fun recordEvent(context: Context, userId: String?, detection: CrashDetection, detectedAtMs: Long, latitude: Double?, longitude: Double?, outcome: String) {
+    if (userId.isNullOrBlank() || ownerUserId(context) != userId) return
     val events = JSONArray(prefs(context).getString(EVENTS, "[]"))
-    val event = JSONObject()
+    val event = JSONObject().put("userId", userId)
       .put("detectedAt", isoUtc(detectedAtMs))
       .put("peakG", detection.peakG)
       .put("rotationDeg", detection.rotationDeg)
@@ -63,15 +90,20 @@ object CrashStore {
     prefs(context).edit().putString(EVENTS, trimmed.toString()).apply()
   }
 
-  /** Hands the stored events to the app for upload and clears them. */
+  /** Consume only this account's records; retain other owners and discard legacy unowned data. */
   @Synchronized
-  fun consumeEvents(context: Context): List<Map<String, Any?>> {
+  fun consumeEvents(context: Context, userId: String): List<Map<String, Any?>> {
     val events = JSONArray(prefs(context).getString(EVENTS, "[]"))
-    prefs(context).edit().putString(EVENTS, "[]").apply()
-    return (0 until events.length()).map { index ->
+    val remaining = JSONArray()
+    val owned = mutableListOf<Map<String, Any?>>()
+    for (index in 0 until events.length()) {
       val event = events.getJSONObject(index)
-      event.keys().asSequence().associateWith { key -> event.get(key) }
+      val owner = event.optString("userId")
+      if (owner == userId) owned.add(event.keys().asSequence().filter { it != "userId" }.associateWith { key -> event.get(key) })
+      else if (owner.isNotBlank()) remaining.put(event)
     }
+    prefs(context).edit().putString(EVENTS, remaining.toString()).apply()
+    return owned
   }
 
   private fun isoUtc(ms: Long): String =

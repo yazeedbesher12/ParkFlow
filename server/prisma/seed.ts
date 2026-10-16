@@ -27,7 +27,7 @@ export async function seed(){
   ];
   for(const item of demos){const {id,minutes,...data}=item;await db.roadReport.upsert({where:{id},create:{id,reporterUserId:demoUser.id,...data,isDemo:true,expiresAt:new Date(now+minutes*60000)},update:{reporterUserId:demoUser.id,...data,isDemo:true,status:'unverified',confidenceScore:0.35,confirmationCount:0,rejectionCount:0,expiresAt:new Date(now+minutes*60000)}});}
  }
- if(process.env.NODE_ENV!=='production')await seedSharingDemo();
+ if(process.env.NODE_ENV==='development'&&process.env.SEED_SHARING_DEMO==='true')await seedSharingDemo();
  if(process.env.SEED_ADMIN_EMAIL&&process.env.NODE_ENV!=='production'){const email=process.env.SEED_ADMIN_EMAIL.trim().toLowerCase();await db.user.upsert({where:{email},create:{email,emailVerifiedAt:new Date(),fullName:'Development Admin',role:'ADMIN',wallet:{create:{}}},update:{}});}
 }
 /** Local demo only: sample hosts and drivers (marked "demo"), shared rides and private spots, plus the quick-login account. */
@@ -35,7 +35,12 @@ async function seedSharingDemo(){
  const day=86400000,hour=3600000,now=Date.now();
  const at=(days:number,h:number)=>{const d=new Date(now+days*day);d.setUTCHours(h-3,0,0,0);return d;};// h is local Palestine time (UTC+3)
  const person=async(id:string,email:string,fullName:string,gender:string,plate?:string,make?:string,model?:string,color?:string)=>{
-  const u=await db.user.upsert({where:{email},create:{id,email,emailVerifiedAt:new Date(),fullName,firstName:fullName.split(' ')[0]!,gender,wallet:{create:{}}},update:{fullName,gender}});
+  const existing=await db.user.findUnique({where:{email}});
+  if(existing&&existing.id!==id)throw new Error(`Refusing to seed demo identity ${id}: email belongs to another account`);
+  // Match both identity fields when updating; a conflicting email or ID must never mutate a customer.
+  const u=existing
+   ?await db.user.update({where:{id,email},data:{fullName,gender}})
+   :await db.user.create({data:{id,email,emailVerifiedAt:new Date(),fullName,firstName:fullName.split(' ')[0]!,gender,wallet:{create:{}}}});
   if(plate){const plateNumber=plate.replace(/[^0-9]/g,'');// stored as digits only, like the vehicles service does
    const v=await db.vehicle.upsert({where:{plateNumber_region:{plateNumber,region:'PS'}},create:{plateNumber,make,model,color},update:{}});
    await db.userVehicle.upsert({where:{userId_vehicleId:{userId:u.id,vehicleId:v.id}},create:{userId:u.id,vehicleId:v.id,isDefault:true},update:{unlinkedAt:null}});return {user:u,vehicleId:v.id};}
@@ -63,9 +68,13 @@ async function seedSharingDemo(){
  // The quick-login account: named, with a car and ₪200 of demo credit so booking works out of the box.
  const demo=await person('demo-driver','demo@parkflow.ps','Demo Driver','female','1-2345-96','Toyota','Corolla','Blue');
  // Local demo only: admin, so Gate mode and the patrol check can be shown from the same account.
- await db.user.update({where:{id:demo.user.id},data:{role:'ADMIN'}});
- // A test plate camera at the Municipality Garage. Send events with: X-Gate-Key: pfg_dev_camera_key
- await db.gateDevice.upsert({where:{keyHash:createHash('sha256').update('pfg_dev_camera_key').digest('hex')},create:{parkingZoneId:'zone_municipality',name:'Demo camera (dev only)',kind:'camera',keyHash:createHash('sha256').update('pfg_dev_camera_key').digest('hex')},update:{active:true}});
+ await db.user.update({where:{id:'demo-driver',email:'demo@parkflow.ps'},data:{role:'ADMIN'}});
+ // The optional demo camera uses only an explicitly supplied private device credential.
+ const gateDeviceKey=process.env.SEED_GATE_DEVICE_KEY;
+ if(gateDeviceKey&&gateDeviceKey.length>=32){
+  const keyHash=createHash('sha256').update(gateDeviceKey).digest('hex');
+  await db.gateDevice.upsert({where:{keyHash},create:{parkingZoneId:'zone_municipality',name:'Demo camera (dev only)',kind:'camera',keyHash},update:{active:true}});
+ }
  const credited=await db.walletTransaction.findUnique({where:{reference:'demo-credit:demo-driver'}});
  if(!credited){const wallet=await db.wallet.findUniqueOrThrow({where:{userId:demo.user.id}});const balance=wallet.balance+20000;
   await db.wallet.update({where:{id:wallet.id},data:{balance}});

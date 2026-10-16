@@ -1,0 +1,33 @@
+{
+  "name": "@parkflow/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./appConfig": "./src/appConfig.ts",
+    "./common": "./src/common.ts",
+    "./evStation": "./src/evStation.ts",
+    "./index": "./src/index.ts",
+    ".": "./src/index.ts",
+    "./management": "./src/management.ts",
+    "./mapLayers": "./src/mapLayers.ts",
+    "./notification": "./src/notification.ts",
+    "./parking": "./src/parking.ts",
+    "./parkingLayout": "./src/parkingLayout.ts",
+    "./ramallahParking": "./src/ramallahParking.ts",
+    "./reservation": "./src/reservation.ts",
+    "./road": "./src/road.ts",
+    "./roadReport": "./src/roadReport.ts",
+    "./routeDestination": "./src/routeDestination.ts",
+    "./services": "./src/services.ts",
+    "./user": "./src/user.ts",
+    "./vehicle": "./src/vehicle.ts",
+    "./violation": "./src/violation.ts",
+    "./wallet": "./src/wallet.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  }
+}

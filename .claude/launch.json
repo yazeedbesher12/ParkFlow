@@ -2,17 +2,23 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "parkflow-web",
-      "runtimeExecutable": "npx",
+      "name": "parkflow-customer",
+      "runtimeExecutable": "npm",
       "runtimeArgs": [
-        "expo",
-        "start",
-        "--web",
-        "--port",
-        "8081",
+        "run",
+        "web",
+        "--workspace",
+        "@parkflow/customer",
+        "--",
         "--clear"
       ],
       "port": 8081
+    },
+    {
+      "name": "parkflow-management",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "web", "--workspace", "@parkflow/management", "--", "--clear"],
+      "port": 8082
     }
   ]
 }

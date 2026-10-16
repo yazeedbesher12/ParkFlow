@@ -1,9 +1,10 @@
-import { beforeEach, describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { createApp } from '../src/app';
 import { db, atomic } from '../src/database/client';
+import * as database from '../src/database/client';
 import { redis } from '../src/database/redis';
 import { env } from '../src/config/env';
 import * as gates from '../src/modules/gates/service';
@@ -46,7 +47,7 @@ beforeEach(async () => {
   driver = await person();
   await atomic((tx) => post(tx, driver, { amount: 10000, type: 'adjustment', title: 'Test credit', titleAr: 'رصيد اختبار' }));
   const vehicle = await db.vehicle.create({ data: { plateNumber: '1234567' } });
-  await db.userVehicle.create({ data: { userId: driver, vehicleId: vehicle.id } });
+  await db.userVehicle.create({ data: { userId: driver, vehicleId: vehicle.id, verifiedAt: new Date() } });
   vehicleId = vehicle.id;
 });
 
@@ -81,6 +82,71 @@ describe('QR gate', () => {
   it('only lets an operator run the gate at their own lots', async () => {
     await expect(gates.staffEnter(operator, { zoneId: 'mall-lot', plate: '1234567' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(gates.staffEnter({ userId: driver, role: 'USER' }, { zoneId: 'city-lot', plate: '1234567' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('integration gate authorization and privacy', () => {
+  it('allows attendants to operate gates but reserves rule and device changes for managers', async () => {
+    await db.operatorUser.update({ where: { operatorId_userId: { operatorId: 'city', userId: operator.userId } }, data: { memberRole: 'attendant' } });
+    expect((await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' })).plateNumber).toBe('1234567');
+    await expect(gates.rules(operator, 'city-lot', { overstayGraceMinutes: 5, overstayFee: 100, overstayRepeatMinutes: 60, overstayMaxPerStay: 1000 })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(gates.createDevice(operator, 'city-lot', { name: 'Gate', kind: 'camera' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it.each(['visits', 'patrol'] as const)('limits %s overstay refreshes to the authorized lot while the worker still covers all lots', async (action) => {
+    await db.operatorUser.update({ where: { operatorId_userId: { operatorId: 'city', userId: operator.userId } }, data: { memberRole: 'attendant' } });
+    const otherVehicle = await db.vehicle.create({ data: { plateNumber: '7654321' } });
+    await db.userVehicle.create({ data: { userId: driver, vehicleId: otherVehicle.id, verifiedAt: new Date() } });
+    await db.parkingVisit.createMany({ data: [
+      { parkingZoneId: 'city-lot', vehicleId, plateNumber: '1234567', enteredAt: minutes(11), entrySource: 'manual' },
+      { parkingZoneId: 'mall-lot', vehicleId: otherVehicle.id, plateNumber: '7654321', enteredAt: minutes(11), entrySource: 'manual' },
+    ] });
+    if (action === 'visits') await gates.visits(operator, 'city-lot');
+    else await gates.patrolCheck(operator, 'city-lot', '1234567');
+    expect(await db.violation.count({ where: { parkingZoneId: 'city-lot' } })).toBe(1);
+    expect(await db.violation.count({ where: { parkingZoneId: 'mall-lot' } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: driver, type: 'violation_issued' } })).toBe(1);
+    await gates.checkOverstays();
+    expect(await db.violation.count({ where: { parkingZoneId: 'mall-lot' } })).toBe(1);
+    expect(await db.violation.count({ where: { parkingZoneId: 'city-lot' } })).toBe(1);
+  });
+
+  it('does not disclose gate activity or enforcement records to an unverified plate link', async () => {
+    const observer = await person();
+    await db.userVehicle.create({ data: { userId: observer, vehicleId } });
+    await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    await gates.checkOverstays(new Date(Date.now() + 11 * 60_000));
+    expect(await db.notification.count({ where: { userId: observer, type: { in: ['gate_entry', 'overstay_warning', 'violation_issued'] } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: driver, type: 'violation_issued' } })).toBe(1);
+  });
+
+  it('prevents a linked driver from using QR entry or exit to control another account session', async () => {
+    const intruder = await person();
+    await db.userVehicle.create({ data: { userId: intruder, vehicleId } });
+    const ownPass = await gates.gatePass(driver, vehicleId);
+    const entered = await gates.staffEnter(operator, { zoneId: 'city-lot', pass: ownPass.value });
+    const otherPass = await gates.gatePass(intruder, vehicleId);
+    await expect(gates.staffEnter(operator, { zoneId: 'city-lot', pass: otherPass.value })).rejects.toMatchObject({ code: 'ACTIVE_SESSION_EXISTS' });
+    await expect(gates.staffExit(operator, { zoneId: 'city-lot', pass: otherPass.value })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect((await db.parkingSession.findUniqueOrThrow({ where: { id: entered.sessionId! } })).status).toBe('ACTIVE');
+    expect(await db.parkingVisit.count({ where: { exitedAt: null } })).toBe(1);
+    await db.userVehicle.update({ where: { userId_vehicleId: { userId: driver, vehicleId } }, data: { unlinkedAt: new Date() } });
+    await expect(gates.staffExit(operator, { zoneId: 'city-lot', pass: ownPass.value })).rejects.toMatchObject({ code: 'INVALID_GATE_PASS' });
+  });
+
+  it('does not attach an active session from another lot during QR entry', async () => {
+    const active = await sessions.start(driver, { vehicleId, zoneId: 'mall-lot', mode: 'start_stop', entryMethod: 'qr' }, randomUUID());
+    await expect(gates.staffEnter(operator, { zoneId: 'city-lot', pass: (await gates.gatePass(driver, vehicleId)).value })).rejects.toMatchObject({ code: 'ACTIVE_SESSION_EXISTS' });
+    expect((await db.parkingSession.findUniqueOrThrow({ where: { id: active.id } })).parkingZoneId).toBe('mall-lot');
+  });
+
+  it('serializes simultaneous patrol tickets for the same car and lot', async () => {
+    const attempts = await Promise.allSettled([
+      gates.patrolIssue(officer, 'city-lot', '1234567'),
+      gates.patrolIssue(officer, 'city-lot', '1234567'),
+    ]);
+    expect(attempts.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(await violations()).toHaveLength(1);
   });
 });
 
@@ -161,6 +227,173 @@ describe('plate cameras and the overstay checker', () => {
     const visits = await gates.visits(operator, 'mall-lot');
     expect(visits.find((v) => v.plateNumber === '7654321')?.status).toBe('unregistered');
     expect(visits.find((v) => v.plateNumber === '1234567')).toMatchObject({ status: 'overstaying', violationCount: 1 });
+  });
+});
+
+describe('reviewed gate coverage and transaction guarantees', () => {
+  const permit = (zoneId: string, validTo: Date) => db.permit.create({ data: {
+    userId: driver, vehicleId, type: 'resident', issuer: 'Municipality', status: 'active',
+    validFrom: minutes(120), validTo, zones: { create: { zoneId } },
+  } });
+
+  it('honors a valid permit at its lot for gate entry, overstay checks and patrol', async () => {
+    await permit('city-lot', new Date(Date.now() + 60 * 60_000));
+    const entered = await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    expect(entered.status).toBe('covered');
+    await db.parkingVisit.update({ where: { id: entered.id }, data: { enteredAt: minutes(30) } });
+    await gates.checkOverstays();
+    expect(await violations()).toHaveLength(0);
+    expect(await db.notification.count({ where: { userId: driver, type: 'gate_entry' } })).toBe(0);
+    expect(await gates.patrolCheck(officer, 'city-lot', '1234567')).toMatchObject({ allowed: true, reason: 'permit' });
+  });
+
+  it('does not start or charge metered parking for a valid permit holder entering by QR', async () => {
+    await permit('city-lot', new Date(Date.now() + 60 * 60_000));
+    const balance = (await db.wallet.findUniqueOrThrow({ where: { userId: driver } })).balance;
+    const pass = await gates.gatePass(driver, vehicleId);
+    const entered = await gates.staffEnter(operator, { zoneId: 'city-lot', pass: pass.value });
+    const replayed = await gates.staffEnter(operator, { zoneId: 'city-lot', pass: pass.value });
+    expect(entered).toMatchObject({ status: 'covered', entrySource: 'qr' });
+    expect(replayed.id).toBe(entered.id);
+    expect(entered.sessionId).toBeUndefined();
+    expect(await db.parkingSession.count({ where: { vehicleId } })).toBe(0);
+    await gates.staffExit(operator, { zoneId: 'city-lot', pass: pass.value });
+    expect((await db.wallet.findUniqueOrThrow({ where: { userId: driver } })).balance).toBe(balance);
+    expect(await db.walletTransaction.count({ where: { type: 'parking_payment' } })).toBe(0);
+    expect(await violations()).toHaveLength(0);
+  });
+
+  it('keeps a long-running metered session covered when the driver enters later by QR', async () => {
+    const session = await sessions.start(driver, { vehicleId, zoneId: 'city-lot', mode: 'start_stop', entryMethod: 'qr' }, randomUUID());
+    await db.parkingSession.update({ where: { id: session.id }, data: { startedAt: minutes(180) } });
+    const entered = await gates.staffEnter(operator, { zoneId: 'city-lot', pass: (await gates.gatePass(driver, vehicleId)).value });
+    expect(entered).toMatchObject({ status: 'covered', sessionId: session.id });
+    await db.parkingVisit.update({ where: { id: entered.id }, data: { enteredAt: minutes(20) } });
+    await gates.checkOverstays();
+    expect(await violations()).toHaveLength(0);
+    expect((await gates.visits(operator, 'city-lot'))[0]!.status).toBe('covered');
+  });
+
+  it('keeps long prepaid parking covered when a camera records entry more than two hours after payment', async () => {
+    const session = await sessions.start(driver, { vehicleId, zoneId: 'city-lot', mode: 'prepaid', durationMinutes: 240, entryMethod: 'qr' }, randomUUID());
+    await db.parkingSession.update({ where: { id: session.id }, data: { startedAt: minutes(180), endsAt: new Date(Date.now() + 60 * 60_000) } });
+    const entered = await gates.enter({ zoneId: 'city-lot', plate: '1234567', source: 'camera' });
+    expect(entered.status).toBe('covered');
+    await db.parkingVisit.update({ where: { id: entered.id }, data: { enteredAt: minutes(20) } });
+    await gates.checkOverstays(new Date(Date.now() + 45 * 60_000));
+    expect(await violations()).toHaveLength(0);
+    expect(await db.notification.count({ where: { userId: driver, type: 'gate_entry' } })).toBe(0);
+  });
+
+  it('uses the actual stop time of an old metered session for grace after entry', async () => {
+    const session = await sessions.start(driver, { vehicleId, zoneId: 'city-lot', mode: 'start_stop', entryMethod: 'qr' }, randomUUID());
+    await db.parkingSession.update({ where: { id: session.id }, data: { startedAt: minutes(240) } });
+    const entered = await gates.enter({ zoneId: 'city-lot', plate: '1234567', source: 'camera' });
+    await db.parkingVisit.update({ where: { id: entered.id }, data: { enteredAt: minutes(30) } });
+    await sessions.stop(driver, session.id, randomUUID());
+    const stopped = await db.parkingSession.findUniqueOrThrow({ where: { id: session.id } });
+    await gates.checkOverstays(new Date(stopped.stoppedAt!.getTime() + 5 * 60_000));
+    expect(await violations()).toHaveLength(0);
+    const grace = (await gates.visits(operator, 'city-lot'))[0]!;
+    expect(grace.status).toBe('grace');
+    expect(new Date(grace.graceEndsAt!).getTime()).toBe(stopped.stoppedAt!.getTime() + 10 * 60_000);
+    await gates.checkOverstays(new Date(stopped.stoppedAt!.getTime() + 11 * 60_000));
+    expect((await violations())[0]).toMatchObject({ type: 'expired_parking', amount: 5000 });
+  });
+
+  it.each(['start_stop', 'prepaid'] as const)('excludes a %s session that ended before this visit', async mode => {
+    const session = await sessions.start(driver, { vehicleId, zoneId: 'city-lot', mode, ...(mode === 'prepaid' ? { durationMinutes: 30 } : {}), entryMethod: 'qr' }, randomUUID());
+    await db.parkingSession.update({ where: { id: session.id }, data: {
+      startedAt: minutes(180), stoppedAt: minutes(30), endsAt: minutes(30),
+      status: mode === 'prepaid' ? 'EXPIRED' : 'COMPLETED',
+    } });
+    const entered = await gates.enter({ zoneId: 'city-lot', plate: '1234567', source: 'camera' });
+    expect(entered.status).toBe('grace');
+    await db.parkingVisit.update({ where: { id: entered.id }, data: { enteredAt: minutes(15) } });
+    await gates.checkOverstays();
+    expect((await violations())[0]).toMatchObject({ type: 'no_active_parking', amount: 5000 });
+  });
+
+  it('starts the grace period from permit expiry and warns before issuing an expired-parking violation', async () => {
+    const permission = await permit('city-lot', minutes(5));
+    await db.permit.update({ where: { id: permission.id }, data: { status: 'expired' } });
+    await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    await db.parkingVisit.updateMany({ data: { enteredAt: minutes(60) } });
+    await gates.checkOverstays();
+    expect(await violations()).toHaveLength(0);
+    expect(await db.notification.count({ where: { userId: driver, type: 'overstay_warning' } })).toBe(1);
+    const grace = (await gates.visits(operator, 'city-lot'))[0]!;
+    expect(grace.status).toBe('grace');
+    expect(new Date(grace.graceEndsAt!).getTime()).toBe(permission.validTo.getTime() + 10 * 60_000);
+    await gates.checkOverstays(new Date(permission.validTo.getTime() + 11 * 60_000));
+    expect((await violations())[0]).toMatchObject({ type: 'expired_parking', amount: 5000 });
+  });
+
+  it('does not apply another lot permit to an unpaid stay', async () => {
+    await permit('mall-lot', new Date(Date.now() + 60 * 60_000));
+    await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    await db.parkingVisit.updateMany({ data: { enteredAt: minutes(15) } });
+    await gates.checkOverstays();
+    expect((await violations())[0]).toMatchObject({ type: 'no_active_parking', amount: 5000 });
+  });
+
+  it('rechecks an exited visit after the worker collected an open-visit snapshot', async () => {
+    const entered = await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    await db.parkingVisit.update({ where: { id: entered.id }, data: { enteredAt: minutes(20) } });
+    const snapshot = await db.parkingVisit.findMany({ where: { id: entered.id }, include: { zone: { include: { operator: true } } } });
+    await db.parkingVisit.update({ where: { id: entered.id }, data: { exitedAt: new Date(), exitSource: 'camera' } });
+    const scan = vi.spyOn(db.parkingVisit, 'findMany').mockResolvedValueOnce(snapshot);
+    try { await gates.checkOverstays(); } finally { scan.mockRestore(); }
+    expect(await violations()).toHaveLength(0);
+  });
+
+  it('rechecks newly started coverage when a session commits before the overstay transaction', async () => {
+    await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    await db.parkingVisit.updateMany({ data: { enteredAt: minutes(20) } });
+    const original = database.atomic;
+    const boundary = vi.spyOn(database, 'atomic').mockImplementationOnce(async fn => {
+      await sessions.start(driver, { vehicleId, zoneId: 'city-lot', mode: 'start_stop', entryMethod: 'qr' }, randomUUID());
+      return original(fn);
+    });
+    try { await gates.checkOverstays(); expect(boundary).toHaveBeenCalled(); } finally { boundary.mockRestore(); }
+    expect(await violations()).toHaveLength(0);
+  });
+
+  it('rechecks an extension committed before charging and uses the new paid end for grace', async () => {
+    await gates.staffEnter(operator, { zoneId: 'city-lot', plate: '1234567' });
+    const session = await sessions.start(driver, { vehicleId, zoneId: 'city-lot', mode: 'prepaid', durationMinutes: 30, entryMethod: 'qr' }, randomUUID());
+    const original = database.atomic;
+    const boundary = vi.spyOn(database, 'atomic').mockImplementationOnce(async fn => {
+      await sessions.extend(driver, session.id, 60, randomUUID());
+      return original(fn);
+    });
+    try { await gates.checkOverstays(new Date(session.endsAt!.getTime() + 15 * 60_000)); expect(boundary).toHaveBeenCalled(); } finally { boundary.mockRestore(); }
+    expect(await violations()).toHaveLength(0);
+    const extended = await db.parkingSession.findUniqueOrThrow({ where: { id: session.id } });
+    await gates.checkOverstays(new Date(extended.endsAt!.getTime() + 5 * 60_000));
+    expect(await violations()).toHaveLength(0);
+    await gates.checkOverstays(new Date(extended.endsAt!.getTime() + 11 * 60_000));
+    expect(await violations()).toHaveLength(1);
+  });
+
+  it.each(['closure', 'hours', 'tariff'] as const)('rolls back a QR visit when session start fails because of %s', async failure => {
+    if (failure === 'closure') await db.parkingClosure.create({ data: { zoneId: 'city-lot', startsAt: minutes(1), endsAt: new Date(Date.now() + 60 * 60_000), reason: 'Closed' } });
+    if (failure === 'hours') await db.operatingHour.updateMany({ where: { zoneId: 'city-lot' }, data: { closed: true } });
+    if (failure === 'tariff') await db.parkingTariff.deleteMany({ where: { zoneId: 'city-lot' } });
+    const expected = failure === 'closure' ? 'PARKING_CLOSED' : failure === 'hours' ? 'ZONE_CLOSED' : 'NOT_FOUND';
+    await expect(gates.staffEnter(operator, { zoneId: 'city-lot', pass: (await gates.gatePass(driver, vehicleId)).value })).rejects.toMatchObject({ code: expected });
+    expect(await db.parkingVisit.count()).toBe(0);
+    expect(await db.parkingSession.count()).toBe(0);
+    await gates.checkOverstays(new Date(Date.now() + 30 * 60_000));
+    expect(await violations()).toHaveLength(0);
+  });
+
+  it('preserves a camera visit at another lot when a QR session cannot start', async () => {
+    const recorded = await gates.enter({ zoneId: 'mall-lot', plate: '1234567', source: 'camera' });
+    await db.parkingClosure.create({ data: { zoneId: 'city-lot', startsAt: minutes(1), endsAt: new Date(Date.now() + 60 * 60_000), reason: 'Closed' } });
+    await expect(gates.staffEnter(operator, { zoneId: 'city-lot', pass: (await gates.gatePass(driver, vehicleId)).value })).rejects.toMatchObject({ code: 'PARKING_CLOSED' });
+    expect(await db.parkingVisit.count()).toBe(1);
+    expect(await db.parkingVisit.findUniqueOrThrow({ where: { id: recorded.id } })).toMatchObject({ parkingZoneId: 'mall-lot', entrySource: 'camera', exitedAt: null });
   });
 });
 

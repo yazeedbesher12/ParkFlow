@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { db } from '../../database/client';
-import { requireValue } from '../../utils/errors';
+import { assert, requireValue } from '../../utils/errors';
+import { providerFor } from '../inventory/service';
 import rawConfig from './demoLayouts.json';
 
 const templateId = z.enum(['parallel_rows', 'u_shape', 'angled_parking', 'split_zones']);
@@ -169,7 +170,7 @@ export function getConfiguredSpot(parkingId: string, requestedSpotId: string) {
 export async function getDemoLayout(parkingId: string) {
   const parkingConfig = requireValue(locationConfigs.get(parkingId), 'Demo parking layout not found');
   const parking = requireValue(await db.parkingZone.findFirst({
-    where: { id: parkingId, active: true },
+    where: { id: parkingId, active: true, lifecycle: 'published' },
     select: { id: true, name: true, nameAr: true, updatedAt: true },
   }), 'Parking location not found');
   const geometry = templates[parkingConfig.template];
@@ -235,5 +236,46 @@ export async function getDemoLayout(parkingId: string) {
     },
     isDemo: true as const,
     lastUpdated,
+  };
+}
+
+export async function getParkingLayout(parkingId: string) {
+  const zone = requireValue(await db.parkingZone.findFirst({
+    where: { id: parkingId, active: true, lifecycle: 'published' },
+    select: { id: true, name: true, nameAr: true, inventoryMode: true, inventoryProvider: true, updatedAt: true },
+  }), 'Parking location not found');
+  if (zone.inventoryMode !== 'live') return getDemoLayout(parkingId);
+  const provider = providerFor(zone.inventoryProvider);
+  assert(provider, 'INVENTORY_PROVIDER_UNAVAILABLE', 'Live inventory provider is not configured', 503);
+  const startTime = new Date();
+  const endTime = new Date(startTime.getTime() + 8 * 60 * 60_000);
+  const availability = await provider.getAvailability(zone.id, { startTime, endTime });
+  const geometry = templates.parallel_rows;
+  // This is an allocation schematic, not a surveyed map of physically empty bays.
+  // Keep usable allocations visible when the bounded display omits held tokens.
+  const displayedAllocations = [...availability.spots].sort((a, b) => Number(a.state === 'held') - Number(b.state === 'held'));
+  const spots = displayedAllocations.slice(0, geometry.spots.length).map((item, index) => {
+    const shape = geometry.spots[index];
+    return { ...shape, id: item.id, code: item.code, state: item.state === 'held' ? 'reserved' as const : 'available' as const, type: 'regular' as const };
+  });
+  return {
+    parkingId: zone.id, parkingName: zone.name, parkingNameAr: zone.nameAr,
+    template: 'parallel_rows' as const, dimensions: { width: geometry.width, height: geometry.height },
+    section: { name: 'Reservation allocations', nameAr: 'تخصيصات الحجز', spaceCount: spots.length },
+    entrance: { ...geometry.entrance, label: 'Entrance' }, exit: { ...geometry.exit, label: 'Exit' },
+    lanes: geometry.lanes, islands: geometry.islands, spots,
+    legend: {
+      statuses: [
+        { id: 'available' as const, label: 'Available', labelAr: 'متاح', color: '#1F5A4A' },
+        { id: 'reserved' as const, label: 'Held / reserved', labelAr: 'محجوز', color: '#C89B5B' },
+        { id: 'occupied' as const, label: 'Occupied', labelAr: 'مشغول', color: '#B34F50' },
+        { id: 'out_of_service' as const, label: 'Out of service', labelAr: 'خارج الخدمة', color: '#606E67' },
+      ],
+      types: [
+        { id: 'accessible' as const, label: 'Accessible', labelAr: 'مخصص لذوي الإعاقة', marker: '♿' },
+        { id: 'ev' as const, label: 'EV', labelAr: 'مركبة كهربائية', marker: 'EV' },
+      ],
+    },
+    isDemo: false as const, inventoryMode: 'live' as const, lastUpdated: zone.updatedAt.toISOString(),
   };
 }

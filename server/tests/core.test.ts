@@ -42,6 +42,8 @@ beforeEach(async()=>{
  await db.parkingZone.create({data:{id:'test-zone',operatorId:'op',code:'TEST-001',name:'Test parking',nameAr:'???? ??????',city:'Ramallah',cityAr:'??? ????',latitude:31.9,longitude:35.2,kind:'garage',defaultMode:'start_stop',supportedModes:['start_stop','prepaid'],supportedEntryMethods:['manual','qr','zone_code','gps'],tariffs:{create:{id:'rate',name:'Test',hourlyRate:600,incrementMinutes:15,freeMinutes:5,minimumCharge:100,maxStayMinutes:180,validFrom:new Date('2020-01-01')}},operatingHours:{create:Array.from({length:7},(_,weekday)=>({weekday,opensAt:'00:00',closesAt:'00:00'}))}}});
  await db.roadCheckpoint.create({data:{id:'cp',nameEn:'Test checkpoint',nameAr:'???? ??????',latitude:31.9,longitude:35.2}});
  driver=await login('599111111');other=await login('599222222');vehicleId=(await vehicles.create(driver.user.id,{plateNumber:'1234567',type:'private'})).id;
+ // This fixture represents an explicitly reviewed association; self-added plates remain unverified.
+ await db.userVehicle.update({where:{userId_vehicleId:{userId:driver.user.id,vehicleId}},data:{role:'owner',verifiedAt:new Date()}});
 });
 describe('authentication and authorization',()=>{
  it('keeps development login disabled unless both development guards are enabled',async()=>{
@@ -51,9 +53,9 @@ describe('authentication and authorization',()=>{
    env.NODE_ENV='development';env.DEV_SKIP_EMAIL_OTP=true;
    const first=await request(app).post('/api/v1/auth/dev-login').send({email:' Dev@Example.COM '});
    expect(first.status).toBe(200);expect(first.body).toMatchObject({user:{email:'dev@example.com'},isNewUser:true});
-   expect(first.body.user.emailVerifiedAt).toBeTruthy();
+   expect(first.body.user.emailVerifiedAt).toBeNull();
    expect(await db.wallet.count({where:{userId:first.body.user.id}})).toBe(1);
-   await db.user.update({where:{id:first.body.user.id},data:{fullName:'Dev User'}});
+   await db.user.update({where:{id:first.body.user.id},data:{fullName:'Dev User',profileCompletedAt:new Date()}});
    const again=await request(app).post('/api/v1/auth/dev-login').send({email:'dev@example.com'});
    expect(again.status).toBe(200);expect(again.body).toMatchObject({user:{id:first.body.user.id},isNewUser:false});
    await expect(auth.authenticate(again.body.session.accessToken)).resolves.toMatchObject({userId:first.body.user.id});
@@ -61,14 +63,14 @@ describe('authentication and authorization',()=>{
  });
  it('normalizes emails and stores only OTP hashes',async()=>{const c=await auth.requestOtp({email:' Person@Example.COM '});expect(c.email).toBe('person@example.com');expect(c).not.toHaveProperty('devCode');expect(sentCode()).toMatch(/^\d{6}$/);const state=await redis.hgetall('otp:email:'+c.challengeId);expect(JSON.stringify(state)).not.toContain(sentCode());expect(state.hash).toHaveLength(64);});
  it('expires OTP and enforces one-time use',async()=>{const c=await auth.requestOtp({email:'person@example.com'});await redis.del('otp:email:'+c.challengeId);await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'OTP_EXPIRED'});await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toBeDefined();});
- it('locks after five incorrect OTP attempts',async()=>{const c=await auth.requestOtp({email:'person@example.com'});for(let i=0;i<5;i++)await expect(auth.verifyOtp({challengeId:c.challengeId,code:'000000'},{})).rejects.toBeDefined();await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'OTP_LOCKED'});});
+ it('locks the email after five incorrect OTP attempts',async()=>{const c=await auth.requestOtp({email:'person@example.com'}),wrong=sentCode()==='000000'?'111111':'000000';for(let i=0;i<4;i++)await expect(auth.verifyOtp({challengeId:c.challengeId,code:wrong},{})).rejects.toMatchObject({code:'OTP_INVALID'});await expect(auth.verifyOtp({challengeId:c.challengeId,code:wrong},{})).rejects.toMatchObject({code:'OTP_LOCKED',status:429});await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'OTP_EXPIRED'});await expect(auth.requestOtp({email:'person@example.com'})).rejects.toMatchObject({code:'OTP_LOCKED'});});
  it('enforces resend cooldown',async()=>{await auth.requestOtp({email:'person@example.com'});await expect(auth.requestOtp({email:'person@example.com'})).rejects.toMatchObject({status:429});});
  it('registers with email, logs in to the same account and consumes OTP once',async()=>{
  const c=await auth.requestOtp({email:'new@example.com'}),code=sentCode();
  const first=await auth.verifyOtp({challengeId:c.challengeId,code},{});
  expect(first.user.email).toBe('new@example.com');expect(first.user.phone).toBeNull();expect(first.user.emailVerifiedAt).toBeTruthy();
  await expect(auth.verifyOtp({challengeId:c.challengeId,code},{})).rejects.toMatchObject({code:'OTP_EXPIRED'});
- await redis.del('otp:email:cooldown:new@example.com');
+ await redis.del(`otp:email:${auth.digest('new@example.com')}:cooldown`);
  const next=await auth.requestOtp({email:'NEW@EXAMPLE.COM'});
  const again=await auth.verifyOtp({challengeId:next.challengeId,code:sentCode()},{});
  expect(again.user.id).toBe(first.user.id);
@@ -80,7 +82,7 @@ describe('authentication and authorization',()=>{
  it('cleans up failed delivery so the user can retry',async()=>{
  vi.mocked(emailProvider.sendOtp).mockRejectedValueOnce(new Error('SMTP failure'));
  await expect(auth.requestOtp({email:'retry@example.com'})).rejects.toMatchObject({code:'EMAIL_DELIVERY_FAILED'});
- expect(await redis.exists('otp:email:cooldown:retry@example.com')).toBe(0);
+ expect(await redis.exists(`otp:email:${auth.digest('retry@example.com')}:cooldown`)).toBe(0);
  expect(await redis.keys('otp:email:*')).toEqual(expect.not.arrayContaining([expect.stringContaining('retry@example.com')]));
  await expect(auth.requestOtp({email:'retry@example.com'})).resolves.toHaveProperty('challengeId');
  });
@@ -88,14 +90,23 @@ describe('authentication and authorization',()=>{
  await db.user.create({data:{email:'legacy@example.com',phone:'+970599888888',countryCode:'+970'}});
  const c=await auth.requestOtp({email:'legacy@example.com'});
  await expect(auth.verifyOtp({challengeId:c.challengeId,code:sentCode()},{})).rejects.toMatchObject({code:'EMAIL_MIGRATION_REQUIRED'});
- expect((await request(app).patch('/api/v1/users/me').auth(driver.session.accessToken,{type:'bearer'}).send({email:'changed@example.com'})).status).toBe(400);
+ const changed=await request(app).patch('/api/v1/users/me').auth(driver.session.accessToken,{type:'bearer'}).send({email:'changed@example.com'});
+ expect(changed.status).toBe(409);expect(changed.body.error.code).toBe('EMAIL_CHANGE_REQUIRES_VERIFICATION');
  });
  it('rotates refresh tokens and revokes the family on replay',async()=>{const next=await auth.refresh(driver.session.refreshToken,{});expect(next.refreshToken).not.toBe(driver.session.refreshToken);await expect(auth.authenticate(next.accessToken)).resolves.toMatchObject({userId:driver.user.id});await expect(auth.refresh(driver.session.refreshToken,{})).rejects.toMatchObject({status:401});await expect(auth.refresh(next.refreshToken,{})).rejects.toMatchObject({status:401});expect(await db.refreshToken.findFirst({where:{tokenHash:driver.session.refreshToken}})).toBeNull();});
  it('requires JWT and blocks non-admin access',async()=>{expect((await request(app).get('/api/v1/wallet')).status).toBe(401);expect((await request(app).get('/api/v1/admin/users').auth(driver.session.accessToken,{type:'bearer'})).status).toBe(403);});
  it('invalidates logout sessions immediately',async()=>{const a=await auth.authenticate(driver.session.accessToken);await auth.logout(a.userId,a.sid);await expect(auth.authenticate(driver.session.accessToken)).rejects.toMatchObject({status:401});});
- it('rejects a foreign vehicle and prevents plate self-linking',async()=>{await expect(vehicles.get(other.user.id,vehicleId)).rejects.toMatchObject({status:404});await expect(vehicles.create(other.user.id,{plateNumber:'1234567',type:'private'})).rejects.toMatchObject({code:'OWNERSHIP_VERIFICATION_REQUIRED'});await expect(sessions.start(other.user.id,startInput(),key())).rejects.toMatchObject({status:404});});
+ it('rejects a foreign vehicle and grants no verified access from a plate association',async()=>{await expect(vehicles.get(other.user.id,vehicleId)).rejects.toMatchObject({status:404});await expect(sessions.start(other.user.id,startInput(),key())).rejects.toMatchObject({status:404});const linked=await vehicles.create(other.user.id,{plateNumber:'1234567',type:'private'});expect(linked.verifiedAt).toBeNull();expect(linked.role).toBe('driver');await expect(vehicles.permits(other.user.id,vehicleId)).rejects.toMatchObject({status:403});});
  it('validates request bodies and rejects untrusted client prices',async()=>{const r=await request(app).post('/api/v1/parking/sessions').auth(driver.session.accessToken,{type:'bearer'}).set('Idempotency-Key',key()).send({...startInput(),price:1});expect(r.status).toBe(400);});
  it('enforces CORS allowlist',async()=>{expect((await request(app).get('/health').set('Origin','https://evil.invalid')).status).toBe(403);});
+ it('allows the loopback origin used by Expo web',async()=>{
+  const response=await request(app).options('/api/v1/auth/dev-login')
+   .set('Origin','http://127.0.0.1:8081')
+   .set('Access-Control-Request-Method','POST')
+   .set('Access-Control-Request-Headers','content-type');
+  expect(response.status).toBe(204);
+  expect(response.headers['access-control-allow-origin']).toBe('http://127.0.0.1:8081');
+ });
 });
 describe('parking and ledger invariants',()=>{
  it('starts, closes, charges, and keeps immutable history',async()=>{await credit(driver.user.id);const s=await sessions.start(driver.user.id,startInput(),key());await backdate(s.id);const done=await sessions.stop(driver.user.id,s.id,key());expect(done.status).toBe('COMPLETED');expect(done.finalCost).toBeGreaterThan(0);expect(done.paymentStatus).toBe('paid');expect(await db.walletTransaction.count({where:{parkingSessionId:s.id}})).toBe(1);});
@@ -145,7 +156,19 @@ describe('reports, trust and routing',()=>{
  it('caps rewarded incident reports per day and never rewards a duplicate',async()=>{const dup=await roadReports.create(driver.user.id,{type:'accident',latitude:31.9,longitude:35.2});const again=await roadReports.create(other.user.id,{type:'accident',latitude:31.9,longitude:35.2});expect(again).toMatchObject({duplicate:true,points:null});expect(dup.points).not.toBeNull();await db.pointsEntry.createMany({data:Array.from({length:9},(_,i)=>({userId:driver.user.id,placeId:`old-${i}`,points:10,reason:'incident_report'}))});await db.roadReport.updateMany({data:{createdAt:new Date(Date.now()-11*60000)}});const capped=await roadReports.create(driver.user.id,{type:'other',latitude:31.5,longitude:35.0});expect(capped.created).toBe(true);expect(capped.points).toBeNull();});
  it('also notifies and pays checkpoint report points',async()=>{const reported=await roads.reportRoad(driver.user.id,'cp','open');expect(reported.points?.notification?.type).toBe('points_awarded');expect((await db.notification.findFirstOrThrow({where:{userId:driver.user.id,type:'points_awarded'}})).titleAr).toBe('حصلت على 5 نقاط');await roads.verifyPoints(new Date(Date.now()+16*60000));expect((await wallet.get(driver.user.id)).balance).toBe(50);});
  it('keeps emergency calling off until a number is configured',async()=>{const saved=env.EMERGENCY_CALL_NUMBER;try{env.EMERGENCY_CALL_NUMBER='';expect(emergency.config()).toMatchObject({enabled:false,callNumber:null});env.EMERGENCY_CALL_NUMBER='+970599000000';const r=await request(app).get('/api/v1/emergency/config').auth(driver.session.accessToken,{type:'bearer'});expect(r.body).toMatchObject({enabled:true,callNumber:'+970599000000',countdownSeconds:15});expect((await request(app).get('/api/v1/emergency/config')).status).toBe(401);}finally{env.EMERGENCY_CALL_NUMBER=saved;}});
- it('records crash detections with the number only when a call was made',async()=>{const saved=env.EMERGENCY_CALL_NUMBER;try{env.EMERGENCY_CALL_NUMBER='112';const called=await request(app).post('/api/v1/emergency/crash-events').auth(driver.session.accessToken,{type:'bearer'}).send({detectedAt:new Date().toISOString(),latitude:31.9,longitude:35.2,speedKmh:54,peakG:6.2,rotationDeg:120,outcome:'called'});expect(called.status).toBe(200);expect(called.body).toMatchObject({outcome:'called',calledNumber:'112'});const cancelled=await emergency.recordCrash(driver.user.id,{detectedAt:new Date().toISOString(),peakG:4.5,outcome:'cancelled'});expect(cancelled.calledNumber).toBeNull();expect(await emergency.recentCrashes(other.user.id)).toHaveLength(0);expect((await request(app).post('/api/v1/emergency/crash-events').auth(driver.session.accessToken,{type:'bearer'}).send({detectedAt:'yesterday',peakG:5,outcome:'called'})).status).toBe(400);}finally{env.EMERGENCY_CALL_NUMBER=saved;}});
+ it('records crash detections with the number only when a call was made',async()=>{const saved=env.EMERGENCY_CALL_NUMBER;try{env.EMERGENCY_CALL_NUMBER='112';const called=await request(app).post('/api/v1/emergency/crash-events').set('Idempotency-Key',key()).auth(driver.session.accessToken,{type:'bearer'}).send({detectedAt:new Date().toISOString(),latitude:31.9,longitude:35.2,speedKmh:54,peakG:6.2,rotationDeg:120,outcome:'called'});expect(called.status).toBe(200);expect(called.body).toMatchObject({outcome:'called',calledNumber:'112'});const cancelled=await emergency.recordCrash(driver.user.id,{detectedAt:new Date().toISOString(),peakG:4.5,outcome:'cancelled'},key());expect(cancelled.calledNumber).toBeNull();expect(await emergency.recentCrashes(other.user.id)).toHaveLength(0);expect((await request(app).post('/api/v1/emergency/crash-events').set('Idempotency-Key',key()).auth(driver.session.accessToken,{type:'bearer'}).send({detectedAt:'yesterday',peakG:5,outcome:'called'})).status).toBe(400);}finally{env.EMERGENCY_CALL_NUMBER=saved;}});
+ it('replays crash uploads once per account and rejects key reuse with changed crash data',async()=>{
+  const body={detectedAt:new Date().toISOString(),latitude:31.9,longitude:35.2,peakG:5,outcome:'cancelled' as const};
+  const requestKey=key();
+  const upload=()=>request(app).post('/api/v1/emergency/crash-events').set('Idempotency-Key',requestKey).auth(driver.session.accessToken,{type:'bearer'}).send(body);
+  const first=await upload(),replayed=await upload();
+  expect(first.status).toBe(200);expect(replayed.status).toBe(200);expect(replayed.body.id).toBe(first.body.id);
+  expect(await db.crashEvent.count({where:{userId:driver.user.id}})).toBe(1);
+  expect((await request(app).post('/api/v1/emergency/crash-events').set('Idempotency-Key',requestKey).auth(driver.session.accessToken,{type:'bearer'}).send({...body,peakG:6})).status).toBe(409);
+  const otherUpload=await request(app).post('/api/v1/emergency/crash-events').set('Idempotency-Key',requestKey).auth(other.session.accessToken,{type:'bearer'}).send(body);
+  expect(otherUpload.status).toBe(200);expect(otherUpload.body.id).not.toBe(first.body.id);
+  expect((await request(app).post('/api/v1/emergency/crash-events').auth(driver.session.accessToken,{type:'bearer'}).send(body)).status).toBe(400);
+ });
  it('aggregates parking availability on the backend',async()=>{await roads.reportZone(driver.user.id,'test-zone','full');const response=await request(app).get('/api/v1/parking/zones/test-zone').auth(driver.session.accessToken,{type:'bearer'});expect(response.body.availability).toBe('full');expect(response.body.crowd.reportCount).toBe(1);});
  it('calculates trust tiers, caps paid sessions and deducts unpaid fines',()=>{expect(trustScore({phone:true,vehicles:1,paid:3,reports:0,reportPoints:0,unpaid:0}).discountPercent).toBe(5);expect(trustScore({phone:true,vehicles:1,paid:100,reports:0,reportPoints:0,unpaid:0}).score).toBe(370);expect(trustScore({phone:true,vehicles:1,paid:0,reports:0,reportPoints:0,unpaid:3}).score).toBe(0);});
  it('ranks route alternatives with checkpoint penalties',async()=>{await roads.reportRoad(driver.user.id,'cp','closed');vi.stubGlobal('fetch',vi.fn().mockResolvedValue({json:async()=>({code:'Ok',routes:[{distance:1000,duration:100,geometry:{coordinates:[[35.19,31.9],[35.21,31.9]]}},{distance:2000,duration:200,geometry:{coordinates:[[35.19,32],[35.21,32]]}}]})}));const r=await routingService.getRoute({latitude:31.9,longitude:35.19},{latitude:31.9,longitude:35.21});expect(r.distanceMeters).toBe(2000);expect(r.rejected[0]?.blockedBy?.status).toBe('closed');});

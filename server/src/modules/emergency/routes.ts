@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { empty, route, user } from '../../apiRegistry';
+import { empty, key, route, user } from '../../apiRegistry';
 import * as emergency from './service';
 
 route('get', '/emergency/config', empty, async () => emergency.config());
@@ -12,6 +12,6 @@ route('post', '/emergency/crash-events', z.object({
   peakG: z.number().min(0).max(100),
   rotationDeg: z.number().min(0).max(180).optional(),
   outcome: z.enum(['cancelled', 'called', 'call_failed', 'no_number']),
-}).strict(), (r, body) => emergency.recordCrash(user(r), body));
+}).strict(), (r, body) => emergency.recordCrash(user(r), body, key(r)));
 
 route('get', '/emergency/crash-events', empty, (r) => emergency.recentCrashes(user(r)));

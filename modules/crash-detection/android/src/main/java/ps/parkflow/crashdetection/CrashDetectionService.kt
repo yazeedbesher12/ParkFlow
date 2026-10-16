@@ -61,7 +61,8 @@ class CrashDetectionService : Service(), SensorEventListener, LocationListener {
   }
 
   private val handler = Handler(Looper.getMainLooper())
-  private val detector = CrashDetector()
+  private var detector = CrashDetector()
+  private var activeUserId: String? = null
   private var sensorOn = false
   private var locationIntervalMs = 0L
   private var lastLocation: Location? = null
@@ -117,10 +118,13 @@ class CrashDetectionService : Service(), SensorEventListener, LocationListener {
     checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
   private fun startMonitoring(): Boolean {
-    if (!CrashStore.isEnabled(this) || !hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
+    val owner = CrashStore.ownerUserId(this)
+    if (owner == null || !CrashStore.isEnabled(this) || !hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
       stopSelf()
       return false
     }
+    if (running && activeUserId != owner) stopMonitoring()
+    activeUserId = owner
     try {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
         startForeground(MONITOR_ID, monitorNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
@@ -147,6 +151,9 @@ class CrashDetectionService : Service(), SensorEventListener, LocationListener {
     locationManager.removeUpdates(this)
     locationIntervalMs = 0L
     if (alert != null) finishAlert("cancelled")
+    activeUserId = null
+    lastLocation = null
+    detector = CrashDetector()
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) stopForeground(STOP_FOREGROUND_REMOVE) else @Suppress("DEPRECATION") stopForeground(true)
   }
 
@@ -199,6 +206,7 @@ class CrashDetectionService : Service(), SensorEventListener, LocationListener {
   // ---- Alert --------------------------------------------------------------
 
   private fun raise(detection: CrashDetection) {
+    if (activeUserId == null || activeUserId != CrashStore.ownerUserId(this) || !CrashStore.isEnabled(this)) return
     if (alert != null) return
     alert = detection
     alertLocation = lastLocation
@@ -215,14 +223,24 @@ class CrashDetectionService : Service(), SensorEventListener, LocationListener {
   }
 
   private fun callNow() {
-    if (alert == null) return
-    val number = CrashStore.callNumber(this)
-    finishAlert(if (number == null) "no_number" else placeCall(number))
+    CrashStore.withExecutionFence {
+      if (alert == null) return@withExecutionFence
+      // Expo can invalidate the owner from its JS thread. Hold the same
+      // monitor through number lookup and dispatch, including the fallback
+      // notification, so logout cannot fit between authorization and launch.
+      if (activeUserId == null || activeUserId != CrashStore.ownerUserId(this) || !CrashStore.isEnabled(this)) {
+        finishAlert("cancelled")
+        return@withExecutionFence
+      }
+      val number = CrashStore.callNumber(this)
+      finishAlert(if (number == null) "no_number" else placeCall(number))
+    }
   }
 
   /**
    * TelecomManager.placeCall is not an activity start, so unlike opening the
    * dialer it is allowed from the background — the driver does not need to tap.
+   * The caller holds the CrashStore execution fence until dispatch completes.
    */
   @SuppressLint("MissingPermission")
   private fun placeCall(number: String): String {
@@ -245,7 +263,7 @@ class CrashDetectionService : Service(), SensorEventListener, LocationListener {
     vibrator()?.cancel()
     notificationManager.cancel(ALERT_ID)
     val detectedAt = System.currentTimeMillis() - (SystemClock.elapsedRealtime() - detection.impactAt)
-    CrashStore.recordEvent(this, detection, detectedAt, alertLocation?.latitude, alertLocation?.longitude, outcome)
+    CrashStore.recordEvent(this, activeUserId, detection, detectedAt, alertLocation?.latitude, alertLocation?.longitude, outcome)
     CrashAlertState.endsAtElapsed = null
     alert = null
     alertLocation = null

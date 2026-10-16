@@ -34,9 +34,9 @@ The driver can turn it off in **Settings → السلامة → كشف الحو�
 | --- | --- |
 | Android background service, countdown screen, call | `modules/crash-detection/android/…/CrashDetectionService.kt`, `CrashAlertActivity.kt` |
 | Detection logic (Android) | `modules/crash-detection/android/…/CrashDetector.kt` |
-| Detection logic (in-app, iOS) | `src/utils/crashDetector.ts`. Keep the two in step. |
-| Starting/stopping, permissions, uploads | `src/hooks/useCrashDetection.ts` |
-| In-app countdown (iOS) | `src/components/navigation/CrashCountdown.tsx` |
+| Detection logic (in-app, iOS) | `packages/client/src/utils/crashDetector.ts`. Keep the two in step. |
+| Starting/stopping, permissions, uploads | `packages/client/src/hooks/useCrashDetection.ts` |
+| In-app countdown (iOS) | `apps/customer/src/components/navigation/CrashCountdown.tsx` |
 | Backend config and records | `server/src/modules/emergency/` |
 
 `modules/crash-detection` is a local Expo module. It is linked automatically on

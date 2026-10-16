@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "ParkFlow Management",
+    "slug": "parkflow-management",
+    "scheme": "parkflow-management",
+    "version": "1.0.0",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "icon": "../../packages/design/assets/icon.png",
+    "web": {
+      "bundler": "metro",
+      "favicon": "../../packages/design/assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font"
+    ],
+    "extra": {
+      "parkflowApplication": "management"
+    },
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

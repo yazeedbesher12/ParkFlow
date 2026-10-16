@@ -39,6 +39,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+apps/*/ios/
+apps/*/android/
 
 # secrets — the Google Maps key is read from the environment, never committed
 .env
@@ -76,3 +78,15 @@ coverage/
 
 # Logs
 *.log
+# Local database backups contain private application data.
+server/.backups/
+dist-platform-check/
+
+# Local assistant sessions and private provider diagnostics
+.superpowers/
+TWILIO_DELIVERY_SUPPORT.txt
+twilio-ticket-*.jpg
+twilio-ticket-*.png
+
+# Keep private database backups locally, outside versioned application changes.
+server/backups/

@@ -149,16 +149,56 @@ enum ParkingReservationStatus {
   completed
 }
 
+enum InventoryMode {
+  demo
+  live
+}
+
+enum ReservationGuarantee {
+  none
+  operator_backed
+}
+
+enum InventoryHoldStatus {
+  active
+  released
+  expired
+  consumed
+}
+
+enum ReservationResolution {
+  none
+  alternative
+  refund_requested
+}
+
+enum ParkingFeedbackOutcome {
+  found
+  not_found
+  delayed
+}
+
+enum ParkingFeedbackDelayBucket {
+  under_5m
+  five_15m @map("5_15m")
+  over_15m
+}
+
 model User {
   id                      String               @id @default(uuid())
   phone                   String?              @unique
   countryCode             String?
   phoneVerifiedAt         DateTime?
-  fullName                String               @default("")
-  firstName               String               @default("")
-  lastName                String               @default("")
-  email                   String?              @unique
+  phoneVerificationPending Boolean            @default(false)
+  fullName                String              @default("")
+  firstName               String              @default("")
+  lastName                String              @default("")
+  email                   String?             @unique
   emailVerifiedAt         DateTime?
+  emailVerificationPending Boolean           @default(false)
+  nationalIdEncrypted     String?
+  nationalIdLast4         String?
+  profileCompletedAt      DateTime?
   avatarUrl               String?
   locale                  String               @default("en")
   role                    Role                 @default(USER)
@@ -188,6 +228,7 @@ model User {
   audits                  AuditLog[]
   idempotencies           IdempotencyRecord[]
   parkingReservations     ParkingReservation[]
+  parkingFeedback         ParkingFeedback[]
   gender                  String?
   ridesOffered            Ride[]
   rideBookings            RideBooking[]
@@ -202,6 +243,10 @@ model RefreshToken {
   userId     String
   user       User      @relation(fields: [userId], references: [id])
   tokenHash  String    @unique
+  transport  String    @default("native")
+  metadataVersion Int @default(0)
+  developmentPhoneLogin Boolean @default(false)
+  developmentEmailLogin Boolean @default(false)
   familyId   String
   expiresAt  DateTime
   revokedAt  DateTime?
@@ -241,7 +286,8 @@ model UserVehicle {
   vehicleId  String
   user       User      @relation(fields: [userId], references: [id])
   vehicle    Vehicle   @relation(fields: [vehicleId], references: [id])
-  role       String    @default("owner")
+  role       String    @default("driver")
+  verifiedAt DateTime?
   nickname   String?
   isDefault  Boolean   @default(false)
   linkedAt   DateTime  @default(now())
@@ -266,6 +312,7 @@ model ParkingOperator {
 model OperatorUser {
   operatorId String
   userId     String
+  memberRole String          @default("manager")
   operator   ParkingOperator @relation(fields: [operatorId], references: [id])
   user       User            @relation(fields: [userId], references: [id])
 
@@ -283,6 +330,9 @@ model ParkingFacility {
   levels       Int
   hasAnpr      Boolean       @default(false)
   hasBarrier   Boolean       @default(false)
+  entrances    Json?
+  exits        Json?
+  walkingDestinations Json?
   zones        ParkingZone[]
 
   @@map("parking_facilities")
@@ -309,12 +359,17 @@ model ParkingZone {
   accessRestrictionAr   String?
   parkingAllowed        Boolean                @default(true)
   prototypeData         Boolean                @default(false)
+  inventoryMode         InventoryMode         @default(demo)
+  inventoryProvider     String?
   /**
    * Reserved spaces for drivers with a disability permit — 0 when none are marked.
    */
   accessibleSpots       Int                    @default(0)
   capacity              Int?
   active                Boolean                @default(true)
+  version               Int                    @default(1)
+  lifecycle             String                 @default("published")
+  metadata              Json?
   defaultMode           ParkingMode
   supportedModes        ParkingMode[]
   supportedEntryMethods String[]
@@ -328,6 +383,9 @@ model ParkingZone {
   violations            Violation[]
   permits               PermitZone[]
   reservations          ParkingReservation[]
+  feedback              ParkingFeedback[]
+  inventoryHolds        InventoryHold[]
+  closures              ParkingClosure[]
   /// Overstay rules, set per lot by its operator (minutes / minor units).
   overstayGraceMinutes  Int                    @default(10)
   overstayFee           Int                    @default(5000)
@@ -338,6 +396,40 @@ model ParkingZone {
 
   @@index([latitude, longitude])
   @@map("parking_zones")
+}
+
+model ParkingClosure {
+  id        String      @id @default(uuid())
+  zoneId    String
+  zone      ParkingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  startsAt  DateTime
+  endsAt    DateTime
+  reason    String
+  createdAt DateTime    @default(now())
+
+  @@index([zoneId, startsAt, endsAt])
+  @@map("parking_closures")
+}
+
+model AppConfigRevision {
+  id          String    @id @default(uuid())
+  version     Int       @unique
+  payload     Json
+  createdBy   String
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+  publication Json?
+
+  @@map("app_config_revisions")
+}
+
+model AppConfigState {
+  id                  String  @id @default("global")
+  publishedRevisionId String?
+  draftRevisionId     String?
+  version             Int     @default(0)
+
+  @@map("app_config_state")
 }
 
 model ParkingTariff {
@@ -400,6 +492,7 @@ model ParkingSession {
   updatedAt              DateTime            @updatedAt
   transactions           WalletTransaction[]
   debt                   SessionDebt?
+  feedback               ParkingFeedback[]
 
   @@index([vehicleId, status])
   @@index([userId, startedAt])
@@ -422,17 +515,68 @@ model ParkingReservation {
   currency                    String                   @default("ILS") @db.VarChar(3)
   priceIsDemo                 Boolean                  @default(false)
   isDemoReservation           Boolean                  @default(true)
+  inventoryMode               InventoryMode            @default(demo)
+  guarantee                   ReservationGuarantee     @default(none)
+  holdId                      String?                  @unique
+  holdExpiresAt               DateTime?
+  checkedInAt                 DateTime?
+  operatorResolution          ReservationResolution    @default(none)
+  operatorResolutionNote      String?
   status                      ParkingReservationStatus @default(confirmed)
   publicCode                  String                   @unique @db.VarChar(32)
   qrToken                     String                   @unique @db.VarChar(128)
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
+  feedback                    ParkingFeedback[]
+  hold                        InventoryHold?           @relation("ReservationInventoryHold", fields: [holdId], references: [id])
 
   @@index([userId, startTime])
   @@index([status, endTime])
   @@index([parkingZoneId, startTime])
   @@index([spotId, startTime, endTime])
   @@map("parking_reservations")
+}
+
+model InventoryHold {
+  id          String              @id @default(uuid())
+  zoneId      String
+  zone        ParkingZone         @relation(fields: [zoneId], references: [id])
+  spotId      String
+  startTime   DateTime
+  endTime     DateTime
+  expiresAt   DateTime
+  holdKey     String              @unique
+  status      InventoryHoldStatus @default(active)
+  reservation ParkingReservation? @relation("ReservationInventoryHold")
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([zoneId, spotId, startTime, endTime])
+  @@index([status, expiresAt])
+  @@map("inventory_holds")
+}
+
+model ParkingFeedback {
+  id             String                     @id @default(uuid())
+  userId         String
+  user           User                       @relation(fields: [userId], references: [id])
+  zoneId         String
+  zone           ParkingZone                @relation(fields: [zoneId], references: [id])
+  sessionId      String?
+  session        ParkingSession?            @relation(fields: [sessionId], references: [id])
+  reservationId  String?
+  reservation    ParkingReservation?        @relation(fields: [reservationId], references: [id])
+  outcome        ParkingFeedbackOutcome
+  delayBucket    ParkingFeedbackDelayBucket?
+  idempotencyKey String
+  createdAt      DateTime                   @default(now())
+
+  @@unique([userId, idempotencyKey])
+  @@index([zoneId, createdAt])
+  @@index([userId, createdAt])
+  @@index([sessionId])
+  @@index([reservationId])
+  @@map("parking_feedback")
 }
 
 model SessionDebt {
@@ -838,8 +982,10 @@ model DeviceToken {
   token     String   @unique
   platform  String
   provider  String   @default("fcm")
+  sessionFamilyId String?
   createdAt DateTime @default(now())
 
+  @@index([userId, sessionFamilyId])
   @@map("device_tokens")
 }
 

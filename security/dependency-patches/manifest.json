@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "name": "braces",
+      "version": "3.0.3",
+      "advisory": "GHSA-vfj7-8cjw-p6xm",
+      "files": [
+        {
+          "path": "lib/parse.js",
+          "beforeHash": "e572166565f15fa6ad9865ae49d678218e32aabfd1b3720f6d0d43d39800d310",
+          "afterHash": "5a44cacf2701121dee4d4f8633205cc1f300df13a78749f4496a8e4e1c4cfea1",
+          "edits": [
+            {
+              "before": "'use strict';",
+              "after": "'use strict';\n\nconst assertAstDepth = require('./security-depth.cjs');"
+            },
+            {
+              "before": "    if (value === CHAR_LEFT_PARENTHESES) {",
+              "after": "    if (value === CHAR_LEFT_PARENTHESES) {\n      if (stack.length > assertAstDepth.maxDepth) throw new SyntaxError('Brace nesting exceeds safety limit (100)');"
+            },
+            {
+              "before": "    if (value === CHAR_LEFT_CURLY_BRACE) {",
+              "after": "    if (value === CHAR_LEFT_CURLY_BRACE) {\n      if (stack.length > assertAstDepth.maxDepth) throw new SyntaxError('Brace nesting exceeds safety limit (100)');"
+            }
+          ]
+        },
+        {
+          "path": "lib/compile.js",
+          "beforeHash": "dc98f22eee3d511785d92a00758d5f0d48efed5f5813bdecc2de430c529b5c9f",
+          "afterHash": "ecb4d875c2c526de5e07eb3bf4ac0222710aa8e53e22e31b3610bef45100094b",
+          "edits": [
+            {
+              "before": "'use strict';",
+              "after": "'use strict';\n\nconst assertAstDepth = require('./security-depth.cjs');"
+            },
+            {
+              "before": "const compile = (ast, options = {}) => {",
+              "after": "const compile = (ast, options = {}) => {\n  assertAstDepth(ast);"
+            }
+          ]
+        },
+        {
+          "path": "lib/expand.js",
+          "beforeHash": "41ccc196ebfa7b7781a634e721eb744e4e7bcb54cba427a7e3d6806a1b9e58f7",
+          "afterHash": "a230d8b923f14d3d7ea994b30cb00e2df0cd6f0642a49ee6557f9c36ef67bc4e",
+          "edits": [
+            {
+              "before": "'use strict';",
+              "after": "'use strict';\n\nconst assertAstDepth = require('./security-depth.cjs');"
+            },
+            {
+              "before": "const expand = (ast, options = {}) => {",
+              "after": "const expand = (ast, options = {}) => {\n  assertAstDepth(ast);"
+            }
+          ]
+        },
+        {
+          "path": "lib/stringify.js",
+          "beforeHash": "379f22d77bfa1478341ccd49c5e4267464aabcbba03558bab332aac23fc6f23a",
+          "afterHash": "06dacf5da11bc452c006ed1bcee625fd7221a7dba547c730c566562386be07c5",
+          "edits": [
+            {
+              "before": "'use strict';",
+              "after": "'use strict';\n\nconst assertAstDepth = require('./security-depth.cjs');"
+            },
+            {
+              "before": "module.exports = (ast, options = {}) => {",
+              "after": "module.exports = (ast, options = {}) => {\n  assertAstDepth(ast);"
+            }
+          ]
+        },
+        {
+          "path": "lib/security-depth.cjs",
+          "beforeHash": null,
+          "afterHash": "57b49f786ea0cdbd22330da84f4165d4d78e14ad136d81756b1bbcae074eadc6",
+          "payload": "braces-security-depth.cjs"
+        }
+      ]
+    },
+    {
+      "name": "node-forge",
+      "version": "1.4.0",
+      "advisory": "GHSA-86w9-cpqp-85rv",
+      "files": [
+        {
+          "path": "lib/rsa.js",
+          "beforeHash": "fd4740238145ec26470eb3f06a627c72039538ce1307dbdce40521f94dfd0a50",
+          "afterHash": "c7b72e7ef41f4fc0e5228dce3e37851e9ca064c789365d5e392c25d1c5f6e710",
+          "edits": [
+            {
+              "before": "  }]\n};\n\n/**\n * Wrap digest in DigestInfo object.\n *\n",
+              "after": "  }]\n};\n\n/**\n * Canonically DER-encodes a DigestInfo for a given digest algorithm OID and\n * raw digest value.\n *\n * This is used by RSASSA-PKCS1-v1_5 signature verification to detect any\n * non-canonical encoding of the DigestInfo structure. forge's BER parser and\n * asn1.validate() are intentionally lenient: they silently ignore extra\n * elements in a SEQUENCE, accept a NULL that carries content bytes, and accept\n * non-minimal (long form) length octets. Each of those gives an attacker\n * \"slack\" bytes inside a structurally valid DigestInfo, which is exactly what\n * is needed to mount a Bleichenbacher-style signature forgery against keys\n * with a low public exponent (e.g. e=3). Re-encoding the expected DigestInfo\n * and comparing bytes rejects all such slack in one check rather than\n * enumerating individual malformed shapes.\n *\n * @param oid the digest algorithm OID as a dotted string.\n * @param digestBytes the raw digest value as a binary-encoded string.\n * @param withParams true to include the NULL parameters field in the\n *          DigestAlgorithmIdentifier, false to omit it. Both forms occur in\n *          practice (the with-parameters form is produced by forge and\n *          OpenSSL), so callers compare against both.\n *\n * @return the DER-encoded DigestInfo as a binary-encoded string.\n */\nvar _encodeDigestInfo = function(oid, digestBytes, withParams) {\n  var algorithmIdentifier = [asn1.create(\n    asn1.Class.UNIVERSAL, asn1.Type.OID, false,\n    asn1.oidToDer(oid).getBytes())];\n  if(withParams) {\n    algorithmIdentifier.push(asn1.create(\n      asn1.Class.UNIVERSAL, asn1.Type.NULL, false, ''));\n  }\n  var digestInfo = asn1.create(\n    asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [\n      asn1.create(\n        asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, algorithmIdentifier),\n      asn1.create(\n        asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, false, digestBytes)\n    ]);\n  return asn1.toDer(digestInfo).getBytes();\n};\n\n/**\n * Wrap digest in DigestInfo object.\n *\n"
+            },
+            {
+              "before": "            parseAllBytes: options._parseAllDigestBytes\n          });\n\n          // validate DigestInfo structure and element count\n          var capture = {};\n          var errors = [];\n          if(!asn1.validate(obj, digestInfoValidator, capture, errors) ||\n            obj.value.length !== 2) {\n            var error = new Error(\n              'ASN.1 object does not contain a valid RSASSA-PKCS1-v1_5 ' +\n              'DigestInfo value.');\n",
+              "after": "            parseAllBytes: options._parseAllDigestBytes\n          });\n\n          // validate DigestInfo structure\n          var capture = {};\n          var errors = [];\n          if(!asn1.validate(obj, digestInfoValidator, capture, errors)) {\n            var error = new Error(\n              'ASN.1 object does not contain a valid RSASSA-PKCS1-v1_5 ' +\n              'DigestInfo value.');\n"
+            },
+            {
+              "before": "            }\n          }\n\n          // compare the given digest to the decrypted one\n          return digest === capture.digest;\n        }\n",
+              "after": "            }\n          }\n\n          // Reject any non-canonical DigestInfo encoding. asn1.validate()\n          // above confirms the structure but, by design, tolerates extra\n          // elements (in either the outer DigestInfo or the inner\n          // DigestAlgorithm SEQUENCE), a NULL parameters field carrying\n          // content bytes, and non-minimal (long form) length octets. Each of\n          // those leaves attacker-controlled slack bytes inside an otherwise\n          // \"valid\" DigestInfo, enabling a Bleichenbacher-style signature\n          // forgery for low public exponents (e.g. e=3). Re-encode the\n          // expected DigestInfo from the parsed OID and digest and require the\n          // decoded bytes to match. Accept both the with-parameters form\n          // (produced by forge and OpenSSL) and the parameter-less form.\n          // See CVE-2026-33894 and CVE-2026-85393.\n          //\n          // A prefix comparison is used so that the behaviour of the\n          // unsupported _parseAllDigestBytes=false testing flag is preserved:\n          // in the default strict mode asn1.fromDer() has already rejected any\n          // trailing bytes, so this is an exact match; any slack *within* the\n          // DigestInfo changes its length octets and fails the comparison.\n          var expectedWithParams = _encodeDigestInfo(oid, capture.digest, true);\n          var expectedNoParams = _encodeDigestInfo(oid, capture.digest, false);\n          if(d.substring(0, expectedWithParams.length) !== expectedWithParams &&\n            d.substring(0, expectedNoParams.length) !== expectedNoParams) {\n            throw new Error(\n              'ASN.1 object does not contain a valid RSASSA-PKCS1-v1_5 ' +\n              'DigestInfo value.');\n          }\n\n          // compare the given digest to the decrypted one\n          return digest === capture.digest;\n        }\n"
+            }
+          ]
+        }
+      ],
+      "upstreamCommit": "db05494352dd3c9a5a07c5270333dcc78866cad2"
+    },
+    {
+      "name": "decode-uri-component",
+      "version": "0.2.2",
+      "advisory": "GHSA-vcc3-ghjq-m6fr",
+      "upstreamSourceHash": "9401353df38f8010ad7035fe8d666bce6a4902bc1cff809afc4ab23fa2e0bdaa",
+      "files": [
+        {
+          "path": "index.js",
+          "beforeHash": "3b8ba0a765e1089d11bba9a919d0d8789ecd9a6833ea078d8d9114e1db093863",
+          "afterHash": "ea4b4250da5dc3f6fd8aa86ea99856526f1ea46ac4eb352decfe37cc7fd980b3",
+          "payload": "decode-uri-component-linear.cjs"
+        }
+      ]
+    }
+  ]
+}
