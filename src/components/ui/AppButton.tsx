@@ -34,7 +34,7 @@ export interface AppButtonProps {
   testID?: string;
 }
 
-const heights: Record<ButtonSize, number> = { lg: 52, md: 46, sm: 44 };
+const heights: Record<ButtonSize, number> = { lg: 50, md: 46, sm: 44 };
 const paddings: Record<ButtonSize, number> = { lg: spacing.xxl, md: spacing.xl, sm: spacing.lg };
 
 export function AppButton({
@@ -127,7 +127,7 @@ export function AppButton({
         container,
         {
           minHeight: heights[size],
-          paddingVertical: spacing.md,
+          paddingVertical: spacing.sm + 2,
           paddingHorizontal: paddings[size],
           flexDirection: row,
           alignSelf: fullWidth ? 'stretch' : 'flex-start',

@@ -73,11 +73,11 @@ export const typography: Record<TypographyVariant, VariantStyle> = {
    * space as much as size, so titles never crowd the content they introduce.
    */
   /** The active-parking timer. Tabular figures are applied by AppText. */
-  displayXl: { fontSize: 44, lineHeight: 52, letterSpacing: -1.2, weight: 'semibold' },
-  display: { fontSize: 32, lineHeight: 40, letterSpacing: -0.9, weight: 'semibold' },
-  h1: { fontSize: 26, lineHeight: 34, letterSpacing: -0.6, weight: 'bold' },
+  displayXl: { fontSize: 42, lineHeight: 50, letterSpacing: -1.15, weight: 'semibold' },
+  display: { fontSize: 30, lineHeight: 38, letterSpacing: -0.8, weight: 'semibold' },
+  h1: { fontSize: 24, lineHeight: 32, letterSpacing: -0.5, weight: 'bold' },
   h2: { fontSize: 20, lineHeight: 28, letterSpacing: -0.35, weight: 'semibold' },
-  h3: { fontSize: 17, lineHeight: 24, letterSpacing: -0.2, weight: 'semibold' },
+  h3: { fontSize: 17, lineHeight: 23, letterSpacing: -0.18, weight: 'semibold' },
   titleLg: { fontSize: 16, lineHeight: 22, letterSpacing: -0.15, weight: 'semibold' },
   title: { fontSize: 15, lineHeight: 21, letterSpacing: -0.1, weight: 'semibold' },
   bodyLg: { fontSize: 16, lineHeight: 24, weight: 'regular' },
