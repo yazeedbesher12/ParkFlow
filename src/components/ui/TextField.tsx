@@ -95,7 +95,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             backgroundColor: colors.surface,
             borderRadius: radius.lg,
             paddingHorizontal: spacing.lg,
-            minHeight: emphasis === 'strong' ? 64 : 56,
+            minHeight: emphasis === 'strong' ? 60 : 52,
           },
           animatedBorder,
           halo,

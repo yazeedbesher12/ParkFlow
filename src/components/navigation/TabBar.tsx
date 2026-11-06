@@ -84,7 +84,7 @@ function TabItem({
         justifyContent: 'center',
         gap: 3,
         paddingVertical: spacing.sm,
-        minHeight: 52,
+        minHeight: 50,
       }}
     >
       <View style={{ width: 44, height: 26, alignItems: 'center', justifyContent: 'center' }}>
@@ -93,8 +93,8 @@ function TabItem({
           style={[
             {
               position: 'absolute',
-              width: 44,
-              height: 26,
+              width: 40,
+              height: 24,
               borderRadius: radius.pill,
               backgroundColor: colors.brandSoft,
             },
@@ -103,7 +103,7 @@ function TabItem({
         />
         <Animated.View style={iconStyle}>
           <Icon
-            size={20}
+            size={19}
             color={focused ? colors.brand : colors.textTertiary}
             strokeWidth={focused ? 2.3 : 1.9}
           />
@@ -161,7 +161,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             flexDirection: row,
             alignItems: 'center',
             backgroundColor: colors.glass,
-            borderRadius: radius.xxl,
+            borderRadius: radius.xl,
             paddingHorizontal: spacing.xs,
             paddingVertical: spacing.xs,
             borderWidth: StyleSheet.hairlineWidth * 2,

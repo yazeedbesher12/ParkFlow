@@ -18,7 +18,7 @@ function useWebPolish(brand: string, focusRing: string) {
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const css = `
-      html, body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+      html, body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; overscroll-behavior: none; }
       * { -webkit-tap-highlight-color: transparent; }
       ::selection { background: ${brand}33; }
       :focus { outline: none; }
@@ -59,8 +59,10 @@ export function WebAppShell({ children }: { children: ReactNode }) {
           <View pointerEvents="none" style={[styles.glow, { backgroundColor: colors.deep }]} />
           <View pointerEvents="none" style={styles.caption} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
             <LogoMark size={36} tone="dark" />
-            <AppText variant="title" color="onDeep">ParkFlow</AppText>
-            <AppText variant="caption" color="onDeepMuted">{t('brand.tagline')}</AppText>
+            <View style={{ gap: 1 }}>
+              <AppText variant="title" color="onDeep">ParkFlow</AppText>
+              <AppText variant="caption" color="onDeepMuted">{t('brand.tagline')}</AppText>
+            </View>
           </View>
         </>
       ) : null}
