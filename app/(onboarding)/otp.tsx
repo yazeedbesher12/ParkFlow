@@ -21,6 +21,7 @@ import { useAuthStore } from '@/store/authStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
+import { afterVerificationRoute } from '@/utils/healthOnboarding';
 
 const CODE_LENGTH = 6;
 
@@ -53,12 +54,10 @@ export default function OtpScreen() {
       haptics.success();
       await signIn(session, user);
       // A returning account is already set up; only new ones continue the flow.
-      if (user.fullName) {
+      if (user.fullName && user.healthProfileCompletedAt) {
         completeOnboarding();
-        router.replace('/(tabs)/map');
-      } else {
-        router.replace('/(onboarding)/name');
       }
+      router.replace(afterVerificationRoute(user));
     },
     onError: () => {
       haptics.error();

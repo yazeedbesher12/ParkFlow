@@ -44,6 +44,7 @@ export interface Maneuver {
 }
 
 export interface NavigationRoute {
+  mobility?: RouteResult['mobility'];
   id: string;
   /** Driving or walking — selects thresholds, voice timing and wording. */
   profile: TravelMode;
@@ -142,7 +143,7 @@ let routeCounter = 0;
  * measured along.
  */
 export function buildNavigationRoute(
-  route: Pick<RouteResult, 'source' | 'steps' | 'distanceMeters' | 'durationSeconds'> & { profile?: TravelMode },
+  route: Pick<RouteResult, 'source' | 'steps' | 'distanceMeters' | 'durationSeconds' | 'mobility'> & { profile?: TravelMode },
   via: GeoPoint[] = [],
 ): NavigationRoute | undefined {
   const steps = route.steps;
@@ -191,6 +192,7 @@ export function buildNavigationRoute(
 
   return {
     id,
+    mobility: route.mobility,
     profile: route.profile ?? 'driving',
     line,
     cumulative,

@@ -3,6 +3,7 @@ import { api,route,empty,id,text,money,geo,limit,admins,operators,officers,user,
 import * as authentication from '../../modules/auth/service';
 import { env } from '../../config/env';
 import * as users from '../../modules/users/service';
+import { getHealthProfile, saveHealthProfile, deleteHealthProfile, healthProfileSchema } from '../users/healthProfile';
 import * as vehicles from '../../modules/vehicles/service';
 import * as parking from '../../modules/parking/service';
 import * as sessions from '../../modules/sessions/service';
@@ -24,6 +25,9 @@ route('post','/auth/logout',empty,r=>authentication.logout(user(r),r.auth!.sid))
 route('post','/auth/logout-all',empty,r=>authentication.logout(user(r),r.auth!.sid,true));
 route('get','/auth/me',empty,r=>users.getUser(user(r)));
 route('get','/users/me',empty,r=>users.getUser(user(r)));
+route('get','/users/me/health-profile',empty,async r=>({profile:await getHealthProfile(user(r))}));
+route('patch','/users/me/health-profile',healthProfileSchema,(r,b)=>saveHealthProfile(user(r),b));
+route('delete','/users/me/health-profile',empty,r=>deleteHealthProfile(user(r)));
 route('patch','/users/me',z.object({fullName:text.optional(),locale:z.enum(['en','ar']).optional(),gender:z.enum(['female','male']).optional()}).strict(),(r,b)=>users.updateUser(user(r),b));
 route('get','/users/me/notification-preferences',empty,r=>users.preferences(user(r)));
 route('patch','/users/me/notification-preferences',z.object({parkingReminders:z.boolean(),expiryWarnings:z.boolean(),lowBalance:z.boolean(),violations:z.boolean(),promotions:z.boolean()}).strict(),(r,b)=>users.updatePreferences(user(r),b));

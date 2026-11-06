@@ -48,6 +48,16 @@ const ARABIC_MESSAGES: Record<AppErrorCode, string> = {
 export function errorMessage(error: unknown): string {
   const appError = toAppError(error);
   const locale = usePreferencesStore.getState().locale;
+  if (appError.details?.serverCode === 'EMAIL_DELIVERY_FAILED') {
+    return locale === 'ar'
+      ? 'تعذّر إرسال رمز التحقق بالبريد. حاول مرة أخرى بعد قليل.'
+      : 'We could not send the verification email. Please try again shortly.';
+  }
+  if (appError.code === 'network' && Number(appError.details?.status) >= 500) {
+    return locale === 'ar'
+      ? 'الخادم غير متاح مؤقتًا. حاول مرة أخرى بعد قليل.'
+      : 'The server is temporarily unavailable. Please try again shortly.';
+  }
   if (locale === 'ar') return ARABIC_MESSAGES[appError.code];
 
   switch (appError.code) {

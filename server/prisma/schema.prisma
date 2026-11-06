@@ -151,6 +151,8 @@ enum ParkingReservationStatus {
 }
 
 model User {
+  healthProfileCompletedAt DateTime?
+  healthProfile            HealthProfile?
   id                      String               @id @default(uuid())
   phone                   String?              @unique
   countryCode             String?
@@ -197,6 +199,14 @@ model User {
   spotBookings            SpotBooking[]
 
   @@map("users")
+}
+
+// Health data is encrypted by the application; never included in the User DTO.
+model HealthProfile {
+  userId     String   @id
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ciphertext String
+  updatedAt  DateTime @updatedAt
 }
 
 model RefreshToken {

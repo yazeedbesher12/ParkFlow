@@ -14,6 +14,7 @@ import * as notifications from '../../modules/notifications/service';
 import * as admin from '../../modules/admin/service';
 import { routingService } from '../../modules/routing/service';
 import { summarizeRoute } from '../../modules/routing/summary';
+import { getHealthProfile } from '../users/healthProfile';
 route('get','/roads/checkpoints',empty,()=>roads.checkpoints());
 route('get','/roads/reports',z.object({limit}).strict(),(_r,b)=>roads.feed(b.limit));
 const observation=z.object({directionId:z.enum(['entrance','exit']),observedAt:z.iso.datetime(),note:z.string().trim().max(200).optional(),unverified:z.boolean(),location:geo.extend({accuracy:z.number().min(0).max(100000),capturedAt:z.iso.datetime()}).strict().optional()});
@@ -35,7 +36,10 @@ route(
     originBearing: z.number().min(0).max(360).optional(),
     via: z.array(geo).max(5).optional(),
   }).strict(),
-  (_r, b) => routingService.getRoute(b.origin, b.destination, b),
+  async (r, b) => {
+    const profile = await getHealthProfile(user(r));
+    return routingService.getRoute(b.origin, b.destination, { ...b, mobility: profile?.consent ? profile.mobility : undefined });
+  },
 );
 // Optional AI overview of a planned route. The client sends the provider's own instructions; nothing is routed here.
 route(

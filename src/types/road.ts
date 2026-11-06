@@ -185,6 +185,8 @@ export interface RouteRequestOptions {
 }
 
 export interface RouteResult {
+  /** Only mobility outcomes, never medical selections. */
+  mobility?: { notices: MobilityRouteNoticeCode[] };
   coordinates: GeoPoint[];
   distanceMeters: number;
   durationSeconds: number;
@@ -206,6 +208,9 @@ export interface RouteResult {
   /** Road-network point used by the router when the raw destination is off-road. */
   snappedDestination?: GeoPoint;
 }
+
+export type MobilityRouteNoticeCode = 'highways_applied' | 'highways_unavailable' | 'smoother_partial' |
+  'smoother_unavailable' | 'parking_unverified' | 'step_free_unverified' | 'route_unavailable';
 
 export interface RouteAlternative {
   id: string;

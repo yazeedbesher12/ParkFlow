@@ -94,7 +94,7 @@ export async function api<T>(path:string,options:Options={}):Promise<T>{
  if(response.status>=500||response.status===408||response.status===401&&!error?.code
     ||response.ok&&(path==='/auth/me'||path==='/users/me')&&(!data||typeof data!=='object'
       ||!('id' in data)||typeof data.id!=='string'||!('fullName' in data)||typeof data.fullName!=='string'
-      ||!options.public&&session&&data.id!==session.userId))throw new AppError('network','The server is temporarily unavailable. Please try again',{status:response.status});
+      ||!options.public&&session&&data.id!==session.userId))throw new AppError('network','The server is temporarily unavailable. Please try again',{status:response.status,serverCode:error?.code});
  if(!response.ok||error){const code=error?.code??'UNKNOWN';throw new AppError(code==='UNAUTHORIZED'&&!confirmedUnauthorized?'unknown':codes[code]??(response.status===409?'conflict':response.status===400?'validation':'unknown'),error?.message??'The request failed',{...error?.details,serverCode:code,status:response.status});}
  lastResponseAt=Date.now();
  return data as T;

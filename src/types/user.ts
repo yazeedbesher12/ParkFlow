@@ -1,6 +1,7 @@
 import type { ID, ISODateString } from './common';
 
 export interface User {
+  healthProfileCompletedAt?: ISODateString | null;
   id: ID;
   fullName: string;
   phone?: string | null;

@@ -6,6 +6,8 @@ type CheckpointState = Awaited<ReturnType<typeof checkpoints>>[number];
 interface RouteClosure {checkpointId:string;nameAr:string;nameEn:string;status:'closed'|'congested'}
 import { distanceMeters, distanceToPolyline } from '../../utils/geo';
 import { enrichTraffic } from './traffic';
+import { db } from '../../database/client';
+import type { MobilityPreferences } from '../users/healthProfile';
 
 
 /**
@@ -84,6 +86,8 @@ interface OsrmNearestResponse {
 }
 
 interface RouteOptions {
+  /** Loaded by the authenticated endpoint; diagnoses are never passed here. */
+  mobility?: MobilityPreferences;
   /** Driving (default) or walking. */
   profile?: TravelProfile;
   mode?: 'checkpoint-aware' | 'fastest';
@@ -128,8 +132,8 @@ function stepsOf(legs: NonNullable<OsrmResponse['routes']>[number]['legs']): Rou
   );
 }
 
-async function fetchRoutes(profile: TravelProfile, points: GeoPoint[], bearing?: number): Promise<OsrmRoute[]> {
-  const key = keyOf(profile, points, bearing);
+async function fetchRoutes(profile: TravelProfile, points: GeoPoint[], bearing?: number, avoidHighways = false): Promise<OsrmRoute[]> {
+  const key = keyOf(profile, points, bearing) + (avoidHighways ? ':exclude-motorway' : '');
   const hit = cache.get(key);
   if (hit && hit.expires>Date.now()) return hit.routes;
 
@@ -144,7 +148,7 @@ async function fetchRoutes(profile: TravelProfile, points: GeoPoint[], bearing?:
     const provider = PROVIDERS[profile];
     const url =
       `${provider.base}/route/v1/${provider.profile}/${coordinates}` +
-      `?alternatives=${points.length === 2}&overview=full&geometries=geojson&steps=true${bearings}`;
+      `?alternatives=${points.length === 2}&overview=full&geometries=geojson&steps=true${bearings}${avoidHighways ? '&exclude=motorway' : ''}`;
     const response = await fetch(url, { signal: controller.signal, headers: HEADERS });
     const json = (await response.json()) as OsrmResponse;
     if (json.code !== 'Ok' || !json.routes?.length) return [];
@@ -210,17 +214,52 @@ export const routingService = {
     const via = options.via ?? [];
     // A walker can turn on the spot, so a heading hint only matters when driving.
     const bearing = profile === 'driving' ? options.originBearing : undefined;
-    const fetched = await fetchRoutes(profile, [from, ...via, destination], bearing);
-    // A heading hint can make OSRM fail when the car sits on an unmapped lot; retry without it.
-    const routesPromise = fetched.length || bearing === undefined
-      ? Promise.resolve(fetched)
-      : fetchRoutes(profile, [from, ...via, destination]);
+    const notices: string[] = [];
+    const wantsHighwayAvoidance = !!options.mobility?.avoidHighways && profile === 'driving';
+    const load = async (avoidHighways: boolean) => {
+      const fetched = await fetchRoutes(profile, [from, ...via, destination], bearing, avoidHighways);
+      // Keep the existing heading fallback, including the requested exclusion.
+      return fetched.length || bearing === undefined ? fetched : fetchRoutes(profile, [from, ...via, destination], undefined, avoidHighways);
+    };
+    let motorwayExcluded = false;
+    const routesPromise = (async () => {
+      if (wantsHighwayAvoidance) {
+        const excluded = await load(true);
+        if (excluded.length) { motorwayExcluded = true; return excluded; }
+      }
+      // Some OSRM deployments cannot exclude motorways. Preserve navigation,
+      // but explicitly warn rather than claiming the preference was satisfied.
+      return load(false);
+    })();
     const [routes, states] = await Promise.all([
       routesPromise,
       options.mode === 'fastest' ? Promise.resolve([] as CheckpointState[]) : checkpoints(),
     ]);
 
+    if (wantsHighwayAvoidance) notices.push(motorwayExcluded ? 'highways_applied' : 'highways_unavailable');
+    if (options.mobility?.accessibleParking) notices.push('parking_unverified');
+    if (options.mobility?.stepFreeAccess && profile === 'walking') notices.push('step_free_unverified');
+    let hazards: { latitude: number; longitude: number }[] = [];
+    if (options.mobility?.preferSmootherRoads && routes.length) {
+      try {
+        const bounds = { minLat: Infinity, maxLat: -Infinity, minLon: Infinity, maxLon: -Infinity };
+        for (const route of routes) for (const point of route.coordinates) {
+          bounds.minLat = Math.min(bounds.minLat, point.latitude); bounds.maxLat = Math.max(bounds.maxLat, point.latitude);
+          bounds.minLon = Math.min(bounds.minLon, point.longitude); bounds.maxLon = Math.max(bounds.maxLon, point.longitude);
+        }
+        hazards = await db.roadReport.findMany({
+          where: { type: { in: ['road_hazard', 'construction'] }, status: 'confirmed', isDemo: false,
+            expiresAt: { gt: new Date() },
+            latitude: { gte: bounds.minLat - 0.003, lte: bounds.maxLat + 0.003 },
+            longitude: { gte: bounds.minLon - 0.003, lte: bounds.maxLon + 0.003 } },
+          select: { latitude: true, longitude: true }, take: 500, orderBy: { createdAt: 'desc' },
+        });
+        notices.push('smoother_partial');
+      } catch { notices.push('smoother_unavailable'); }
+    }
+
     if (!routes.length) {
+      if (options.mobility && Object.values(options.mobility).some(Boolean)) notices.push('route_unavailable');
       const line = [from, ...via, destination];
       const distance = line.slice(1).reduce((sum, point, index) => sum + distanceMeters(line[index]!, point), 0);
       const closures = closuresNear(line, states);
@@ -235,18 +274,20 @@ export const routingService = {
         source: 'straight-line',
         profile,
         snappedDestination: destination,
+        mobility: { notices },
       };
     }
 
     const scored = routes
       .map((route) => {
         const closures = closuresNear(route.coordinates, states);
-        return { ...route, closures, penalty: penaltyOf(closures) };
+        const mobilityPenalty = hazards.filter(hazard => distanceToPolyline(hazard, route.coordinates) <= 80).length * 300;
+        return { ...route, closures, penalty: penaltyOf(closures), mobilityPenalty };
       })
       .sort((a, b) =>
         options.mode === 'fastest'
-          ? a.duration - b.duration
-          : a.duration + a.penalty - (b.duration + b.penalty),
+          ? a.duration + a.mobilityPenalty - (b.duration + b.mobilityPenalty)
+          : a.duration + a.penalty + a.mobilityPenalty - (b.duration + b.penalty + b.mobilityPenalty),
       );
 
     const best = scored[0]!;
@@ -275,6 +316,7 @@ export const routingService = {
       source: 'osrm',
       profile,
       snappedDestination: destination,
+      mobility: { notices },
     };
   },
 };

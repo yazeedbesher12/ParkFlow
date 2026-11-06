@@ -9,6 +9,7 @@ import { shadow } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 import type { RamallahParkingLocation, RouteResult } from '@/types';
 import { formatDistance } from '@/utils/geo';
+import { MobilityRouteNotice } from './MobilityRouteNotice';
 
 interface ParkingRoutePanelProps {
   location: RamallahParkingLocation;
@@ -52,6 +53,7 @@ export function ParkingRoutePanel({ location, route, loading, onCancel }: Parkin
       </View>
 
       <View style={{ flex: 1, minWidth: 0 }}>
+        <MobilityRouteNotice mobility={route?.mobility} />
         <AppText variant="label" numberOfLines={1}>
           {name}
         </AppText>

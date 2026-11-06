@@ -33,6 +33,26 @@ function slowFetch(delay: number) {
   });
 }
 
+describe('Server error messages', () => {
+  it('identifies email delivery failure instead of blaming the internet connection', async () => {
+    fetchMock.mockResolvedValue(response({ error: { code: 'EMAIL_DELIVERY_FAILED', message: 'Unable to send email' } }, 503));
+    const { errorMessage } = await import('../src/utils/errors');
+    const error = await client.api('/auth/request-otp', { method: 'POST', body: { email: 'test@example.com' }, public: true }).catch(error => error);
+    expect(error.details).toMatchObject({ status: 503, serverCode: 'EMAIL_DELIVERY_FAILED' });
+    expect(errorMessage(error)).toBe('We could not send the verification email. Please try again shortly.');
+  });
+
+  it('distinguishes server downtime from a failed connection', async () => {
+    fetchMock.mockResolvedValue(response({ error: { code: 'INTERNAL', message: 'Unavailable' } }, 500));
+    const { errorMessage } = await import('../src/utils/errors');
+    const error = await client.api('/auth/request-otp', { public: true }).catch(error => error);
+    expect(errorMessage(error)).toBe('The server is temporarily unavailable. Please try again shortly.');
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    const offline = await client.api('/auth/request-otp', { public: true }).catch(error => error);
+    expect(errorMessage(offline)).toBe('No connection. Check your internet and try again.');
+  });
+});
+
 describe('Render cold starts and session preservation', () => {
   it('recovers an expired remembered session after an outage and a 52-second refresh without extending its deadline', async () => {
     const saved = { ...session(), expiresAt: new Date(Date.now() - 1000).toISOString(), rememberedUntil: new Date(Date.now() + 23 * 3600000).toISOString() };

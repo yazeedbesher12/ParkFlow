@@ -59,7 +59,7 @@ const queryClient = new QueryClient({
  */
 function useAuthGate(ready: boolean) {
   const router = useRouter();
-  const segments = useSegments();
+  const segments: readonly string[] = useSegments();
   const user = useAuthStore((s) => s.user);
   const authHydrated = useAuthStore((s) => s.hydrated);
   const onboardingComplete = usePreferencesStore((s) => s.onboardingComplete);
@@ -70,7 +70,11 @@ function useAuthGate(ready: boolean) {
     const inOnboarding = segments[0] === '(onboarding)';
     const signedIn = Boolean(user?.id && user.fullName);
 
-    if (!signedIn && !inOnboarding) {
+    if (user?.id && !user.healthProfileCompletedAt) {
+      if (!inOnboarding || segments[1] !== 'health') router.replace('/(onboarding)/health');
+    } else if (user?.id && !user.fullName && !inOnboarding) {
+      router.replace('/(onboarding)/name');
+    } else if (!signedIn && !inOnboarding) {
       router.replace('/(onboarding)/welcome');
     } else if (signedIn && onboardingComplete && inOnboarding) {
       router.replace('/(tabs)/map');

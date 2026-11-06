@@ -23,6 +23,7 @@ import { errorMessage } from '@/utils/errors';
 import { haptics } from '@/utils/haptics';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { useAuthStore } from '@/store/authStore';
+import { afterVerificationRoute } from '@/utils/healthOnboarding';
 
 export default function EmailScreen() {
   const router = useRouter();
@@ -44,12 +45,10 @@ export default function EmailScreen() {
       haptics.success();
       if ('session' in result) {
         await signIn(result.session, result.user);
-        if (result.user.fullName) {
+        if (result.user.fullName && result.user.healthProfileCompletedAt) {
           completeOnboarding();
-          router.replace('/(tabs)/map');
-        } else {
-          router.replace('/(onboarding)/name');
         }
+        router.replace(afterVerificationRoute(result.user));
         return;
       }
       router.push({

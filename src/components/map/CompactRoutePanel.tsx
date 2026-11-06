@@ -15,6 +15,7 @@ import { useRouteSummary } from '@/hooks/useCommunity';
 import { buildNavigationRoute } from '@/utils/navigation/maneuvers';
 import { localizedStreet, maneuverInstruction } from '@/utils/navigation/instructions';
 import { TravelModeToggle } from './TravelModeToggle';
+import { MobilityRouteNotice } from './MobilityRouteNotice';
 
 /**
  * Optional AI overview, shown inside route details. It is built from the
@@ -273,6 +274,7 @@ export function CompactRoutePanel({
       </View>
 
       {onTravelModeChange ? <TravelModeToggle value={travelMode} onChange={onTravelModeChange} /> : null}
+      <MobilityRouteNotice mobility={route?.mobility} />
 
       {noWalkingRoute ? (
         <View accessible accessibilityRole="alert" style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warningSoft }}>

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/http/apiClient';
 import { useUserId } from '@/hooks/useSession';
 import { Platform, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Check, Moon, Sun, SunMoon } from 'lucide-react-native';
 
 import {
@@ -47,6 +48,7 @@ const PREF_KEYS: (keyof NotificationPreferences)[] = [
 ];
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { colors, mode, setMode } = useTheme();
   const { t, locale, setLocale, row } = useLocale();
 
@@ -89,6 +91,7 @@ export default function SettingsScreen() {
       <AppHeader title={t('profile.settings')} />
 
       <View style={{ gap: spacing.xl }}>
+        <AppButton label={t('health.title')} variant="secondary" onPress={() => router.push('/profile/health')} />
         {/* ---- Language -------------------------------------------------- */}
         <View>
           <SectionHeader title={t('profile.language')} />
