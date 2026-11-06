@@ -38,7 +38,9 @@ describe('Server error messages', () => {
     fetchMock.mockResolvedValue(response({ error: { code: 'EMAIL_DELIVERY_FAILED', message: 'Unable to send email' } }, 503));
     const { errorMessage } = await import('../src/utils/errors');
     const error = await client.api('/auth/request-otp', { method: 'POST', body: { email: 'test@example.com' }, public: true }).catch(error => error);
-    expect(error.details).toMatchObject({ status: 503, serverCode: 'EMAIL_DELIVERY_FAILED' });
+    expect(error).toMatchObject({
+      details: { status: 503, serverCode: 'EMAIL_DELIVERY_FAILED' },
+    });
     expect(errorMessage(error)).toBe('We could not send the verification email. Please try again shortly.');
   });
 
