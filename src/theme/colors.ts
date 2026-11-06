@@ -135,10 +135,10 @@ export const lightColors: ColorScheme = {
   onDeepMuted: 'rgba(255,255,255,0.78)',
   accent: palette.brass500,
 
-  background: palette.neutral50,
+  background: '#F4F5F0',
   surface: palette.white,
-  surfaceAlt: palette.neutral100,
-  surfaceSunken: '#EDEBE4',
+  surfaceAlt: '#EEF1EC',
+  surfaceSunken: '#E8ECE6',
   track: 'rgba(19,33,29,0.06)',
   surfaceInverse: palette.emerald900,
   overlay: 'rgba(7,24,19,0.48)',
@@ -146,9 +146,9 @@ export const lightColors: ColorScheme = {
   glass: 'rgba(255,255,255,0.86)',
   glassBorder: 'rgba(19,33,29,0.07)',
 
-  border: 'rgba(19,33,29,0.10)',
-  borderStrong: 'rgba(19,33,29,0.20)',
-  divider: 'rgba(19,33,29,0.07)',
+  border: 'rgba(19,33,29,0.095)',
+  borderStrong: 'rgba(19,33,29,0.18)',
+  divider: 'rgba(19,33,29,0.065)',
 
   text: palette.neutral900,
   textSecondary: palette.neutral600,

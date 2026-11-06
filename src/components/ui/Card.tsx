@@ -22,8 +22,8 @@ export interface CardProps {
 export function Card({
   children,
   tone = 'raised',
-  padding = 'xl',
-  radiusToken = 'xl',
+  padding = 'lg',
+  radiusToken = 'lg',
   elevation,
   onPress,
   style,
