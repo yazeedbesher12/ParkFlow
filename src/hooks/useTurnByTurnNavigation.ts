@@ -22,6 +22,7 @@ import { markSpoken, planAnnouncement, routeSentences, upcomingSentences } from 
 import { SpeechQueue, type SpeechPriority, type SpeechQueueStatus } from '@/utils/navigation/speechQueue';
 import { chooseVoice, createNavigationVoice, keepScreenAwake, unlockWebAudio, vibrateFor, type NavigationVoice, type VoiceChoice } from '@/utils/navigation/platform';
 import { useNavigationSessionStore } from '@/store/navigationSessionStore';
+import { useRoutingVehicle } from './useRoutingVehicle';
 
 /**
  * Live turn-by-turn session: owns the GPS watcher, routing requests, the voice
@@ -60,6 +61,10 @@ const isOfflineError = (error: unknown) =>
   (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.onLine === false);
 
 export function useTurnByTurnNavigation(locale: Locale) {
+  const vehicle = useRoutingVehicle();
+  const vehicleRef = useRef(vehicle);
+  vehicleRef.current = vehicle;
+  const [routingMobility, setRoutingMobility] = useState<RouteResult['mobility']>();
   const [state, dispatch] = useReducer(navigationReducer, initialNavigationState);
   const stateRef = useRef<NavigationState>(state);
   stateRef.current = state;
@@ -214,9 +219,10 @@ export function useTurnByTurnNavigation(locale: Locale) {
   const requestRoute = useCallback(async () => {
     const current = stateRef.current;
     const target = targetRef.current;
+    const requestVehicle = vehicleRef.current;
     // An accurate fix, or (after a short wait) the best one a computer or indoor phone can give.
     const fix = current.lastGoodFix ?? current.bestFix;
-    if (!target || !fix || inFlightRef.current) return;
+    if (!target || !fix || inFlightRef.current || requestVehicle.isPending) return;
     const now = Date.now();
     const via = current.route ? remainingVia(current) : target.via ?? [];
 
@@ -239,12 +245,14 @@ export function useTurnByTurnNavigation(locale: Locale) {
     try {
       const result = await services.routing.getRoute(fix.point, target.destination, {
         ...target.routeOptions,
+        vehicleId: requestVehicle.vehicleId,
         steps: true,
         via: via.length ? via : undefined,
         // Start the new route in the direction the car is already moving (walkers can turn on the spot).
         originBearing: current.profile === 'driving' && current.speed >= 2 && current.heading !== undefined ? Math.round(current.heading) % 360 : undefined,
       });
-      if (request !== requestRef.current) return;
+      if (request !== requestRef.current || (current.profile === 'driving' && requestVehicle.key !== vehicleRef.current.key)) return;
+      setRoutingMobility(result.mobility);
       const route = buildNavigationRoute(result, via);
       if (!route) {
         dispatch({ type: 'route-failed', reason: reroute ? 'offline' : 'no-guidance', now: Date.now() });
@@ -253,7 +261,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
       spokenRef.current.clear();
       dispatch({ type: 'route-ready', route, now: Date.now() });
     } catch (error) {
-      if (request !== requestRef.current) return;
+      if (request !== requestRef.current || (current.profile === 'driving' && requestVehicle.key !== vehicleRef.current.key)) return;
       dispatch({ type: 'route-failed', reason: isOfflineError(error) ? 'offline' : 'error', now: Date.now() });
     } finally {
       if (request === requestRef.current) inFlightRef.current = false;
@@ -359,6 +367,7 @@ export function useTurnByTurnNavigation(locale: Locale) {
       voiceEngineRef.current?.retry();
       setNaturalVoiceLost(false);
       setNaturalVoiceNotice(false);
+      setRoutingMobility(target.initialRoute?.mobility);
       targetRef.current = { ...target };
       const profile = target.routeOptions?.profile ?? 'driving';
       voiceEngineRef.current?.prefetch([systemPhrases.start(localeRef.current, profile), systemPhrases.rerouting(localeRef.current, profile)]);
@@ -374,10 +383,21 @@ export function useTurnByTurnNavigation(locale: Locale) {
     requestRef.current++;
     inFlightRef.current = false;
     targetRef.current = undefined;
+    setRoutingMobility(undefined);
     queue.reset();
     setLiveMessage(systemPhrases.stopped(localeRef.current));
     dispatch({ type: 'stop' });
   }, [queue]);
+
+  const previousVehicleKey = useRef(vehicle.key);
+  useEffect(() => {
+    if (previousVehicleKey.current === vehicle.key) return;
+    previousVehicleKey.current = vehicle.key;
+    const target = targetRef.current;
+    if (!target || stateRef.current.profile === 'walking' || stateRef.current.status === 'idle' || stateRef.current.status === 'arrived') return;
+    // Restart from a fresh fix, discard old guidance and invalidate in-flight work.
+    start({ ...target, via: stateRef.current.route ? remainingVia(stateRef.current) : target.via, initialRoute: undefined });
+  }, [vehicle.key, start]);
 
   const pause = useCallback(() => {
     queue.clear();
@@ -464,8 +484,13 @@ export function useTurnByTurnNavigation(locale: Locale) {
     setOverview(true);
   }, []);
 
+  const switchingVehicle = Boolean(targetRef.current) && state.status !== 'idle' && state.status !== 'arrived'
+    && state.profile === 'driving' && previousVehicleKey.current !== vehicle.key;
+  const displayedState: NavigationState = switchingVehicle
+    ? { ...state, route: undefined, progress: undefined, status: 'locating' } : state;
   return {
-    state,
+    state: displayedState,
+    routingMobility: switchingVehicle ? undefined : routingMobility,
     target: targetRef.current,
     start,
     stop,

@@ -1,26 +1,26 @@
 import { db,atomic,lock,type Tx } from '../../database/client';
 import { assert,requireValue } from '../../utils/errors';
 import type { Prisma } from '@prisma/client';
-export type VehicleInput={plateNumber:string;type:string;make?:string;model?:string;year?:number;color?:string;colorHex?:string;nickname?:string;region?:string};
+export type VehicleInput={plateNumber:string;type:string;make?:string;model?:string;year?:number;color?:string;colorHex?:string;nickname?:string;avoidHighways?:boolean;region?:string};
 export async function vehicleAccess(tx:Tx,userId:string,vehicleId:string){return requireValue(await tx.userVehicle.findFirst({where:{userId,vehicleId,unlinkedAt:null},include:{vehicle:true}}),'Vehicle not linked to your account');}
-function view(link:Prisma.UserVehicleGetPayload<{include:{vehicle:true}}>){return {...link.vehicle,linkId:link.id,role:link.role,nickname:link.nickname,isDefault:link.isDefault,autoGateParking:link.autoGateParking,displayName:link.nickname||[link.vehicle.make,link.vehicle.model].filter(Boolean).join(' ')||link.vehicle.plateNumber};}
+function view(link:Prisma.UserVehicleGetPayload<{include:{vehicle:true}}>){return {...link.vehicle,linkId:link.id,role:link.role,nickname:link.nickname,isDefault:link.isDefault,autoGateParking:link.autoGateParking,avoidHighways:link.avoidHighways,displayName:link.nickname||[link.vehicle.make,link.vehicle.model].filter(Boolean).join(' ')||link.vehicle.plateNumber};}
 export async function list(userId:string){return (await db.userVehicle.findMany({where:{userId,unlinkedAt:null},include:{vehicle:true},orderBy:{linkedAt:'asc'}})).map(view);}
 export async function get(userId:string,id:string){return view(await vehicleAccess(db,userId,id));}
 export async function create(userId:string,input:VehicleInput){return atomic(async tx=>{
- await lock(tx,`vehicles:${userId}`);const {nickname,...fields}=input;const plateNumber=input.plateNumber.replace(/[^0-9]/g,'');
+ await lock(tx,`vehicles:${userId}`);const {nickname,avoidHighways,...fields}=input;const plateNumber=input.plateNumber.replace(/[^0-9]/g,'');
  const region=input.region??'PS';
  const existing=await tx.vehicle.findUnique({where:{plateNumber_region:{plateNumber,region}}});
  // A plate alone is not proof of ownership. Sharing existing vehicles needs an authorized operator/admin grant.
  if(existing){const own=await tx.userVehicle.findUnique({where:{userId_vehicleId:{userId,vehicleId:existing.id}}});assert(own,'OWNERSHIP_VERIFICATION_REQUIRED','This plate is registered. Contact support to verify access.',409);assert(own.unlinkedAt,'CONFLICT','Vehicle is already linked',409);}
  const vehicle=existing??await tx.vehicle.create({data:{...fields,plateNumber,region}});
  const count=await tx.userVehicle.count({where:{userId,unlinkedAt:null}});
- const link=await tx.userVehicle.upsert({where:{userId_vehicleId:{userId,vehicleId:vehicle.id}},create:{userId,vehicleId:vehicle.id,nickname,isDefault:count===0},update:{unlinkedAt:null,nickname,isDefault:count===0},include:{vehicle:true}});return view(link);
+ const link=await tx.userVehicle.upsert({where:{userId_vehicleId:{userId,vehicleId:vehicle.id}},create:{userId,vehicleId:vehicle.id,nickname,avoidHighways:avoidHighways??false,isDefault:count===0},update:{unlinkedAt:null,nickname,avoidHighways:avoidHighways??false,isDefault:count===0},include:{vehicle:true}});return view(link);
  });}
-export async function update(userId:string,id:string,input:Partial<VehicleInput>){return atomic(async tx=>{const link=await vehicleAccess(tx,userId,id);const {nickname,plateNumber,region,...fields}=input;
+export async function update(userId:string,id:string,input:Partial<VehicleInput>){return atomic(async tx=>{const link=await vehicleAccess(tx,userId,id);const {nickname,avoidHighways,plateNumber,region,...fields}=input;
  assert(!plateNumber||plateNumber.replace(/[^0-9]/g,'')===link.vehicle.plateNumber,'VALIDATION','Plate changes require verification');
  assert(!region||region===link.vehicle.region,'VALIDATION','Region changes require verification');
  assert(link.role==='owner'||link.role==='manager'||Object.keys(fields).length===0,'FORBIDDEN','Only an owner can update vehicle details',403);
- await tx.vehicle.update({where:{id},data:fields});return view(await tx.userVehicle.update({where:{id:link.id},data:{nickname},include:{vehicle:true}}));});}
+ await tx.vehicle.update({where:{id},data:fields});return view(await tx.userVehicle.update({where:{id:link.id},data:{nickname,avoidHighways},include:{vehicle:true}}));});}
 export async function setDefault(userId:string,id:string){await atomic(async tx=>{await lock(tx,`vehicles:${userId}`);const link=await vehicleAccess(tx,userId,id);await tx.userVehicle.updateMany({where:{userId},data:{isDefault:false}});await tx.userVehicle.update({where:{id:link.id},data:{isDefault:true}});});}
 /** The driver's own consent; only they can give it, for their link to the car. */
 export async function setAutoGateParking(userId:string,id:string,enabled:boolean){const link=await vehicleAccess(db,userId,id);return view(await db.userVehicle.update({where:{id:link.id},data:{autoGateParking:enabled},include:{vehicle:true}}));}

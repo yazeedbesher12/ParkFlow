@@ -258,6 +258,8 @@ model UserVehicle {
   isDefault       Boolean   @default(false)
   /// The driver agreed that a SmartGate plate read starts and bills pay-as-you-go parking for this vehicle.
   autoGateParking Boolean   @default(false)
+  /// This driver's routing preference for this vehicle, not a roadworthiness assessment.
+  avoidHighways   Boolean   @default(false)
   linkedAt        DateTime  @default(now())
   unlinkedAt      DateTime?
 

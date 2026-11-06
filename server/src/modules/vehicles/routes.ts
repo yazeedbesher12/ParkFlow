@@ -12,7 +12,7 @@ import * as violations from '../../modules/violations/service';
 import * as notifications from '../../modules/notifications/service';
 import * as admin from '../../modules/admin/service';
 import { routingService } from '../../modules/routing/service';
-const vehicle=z.object({plateNumber:z.string().regex(/^[0-9 -]{5,16}$/),type:z.enum(['private','commercial','taxi','motorcycle']),make:text.optional(),model:text.optional(),year:z.number().int().min(1900).max(2100).optional(),color:text.optional(),colorHex:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),nickname:text.optional(),region:z.enum(['PS','IL']).optional()}).strict();
+const vehicle=z.object({avoidHighways:z.boolean().optional(),plateNumber:z.string().regex(/^[0-9 -]{5,16}$/),type:z.enum(['private','commercial','taxi','motorcycle']),make:text.optional(),model:text.optional(),year:z.number().int().min(1900).max(2100).optional(),color:text.optional(),colorHex:z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),nickname:text.optional(),region:z.enum(['PS','IL']).optional()}).strict();
 route('get','/vehicles',empty,r=>vehicles.list(user(r)));
 route('post','/vehicles',vehicle,(r,b)=>vehicles.create(user(r),b));
 route('get','/vehicles/:id',empty,r=>vehicles.get(user(r),param(r)));

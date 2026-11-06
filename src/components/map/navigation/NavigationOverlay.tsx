@@ -363,8 +363,8 @@ export function NavigationOverlay({
           </Reveal>
         ) : null}
         {banner ? <Reveal key={String(banner.props.text)} offset={-6}>{banner}</Reveal> : null}
-        {route?.mobility?.notices.length ? <View style={{ backgroundColor: colors.surface, padding: spacing.sm, borderRadius: radius.md }}>
-          <MobilityRouteNotice mobility={route.mobility} />
+        {nav.routingMobility?.notices.length ? <View style={{ backgroundColor: colors.surface, padding: spacing.sm, borderRadius: radius.md }}>
+          <MobilityRouteNotice mobility={nav.routingMobility} />
         </View> : null}
         {/* Mounted only during walking guidance: leaving guidance always releases the camera. */}
         {walking && accessibleWalking && state.status !== 'arrived' && state.status !== 'error' ? <ObstacleAwarenessPanel nav={nav} /> : null}

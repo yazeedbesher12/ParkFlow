@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Car, Truck, Bike, CarTaxiFront, ChevronDown, ChevronUp } from 'lucide-react-native';
 
-import { AppButton, AppText, PressableScale, TextField } from '@/components/ui';
+import { AppButton, AppText, PressableScale, SwitchRow, TextField } from '@/components/ui';
 import { useTheme } from '@/theme/ThemeProvider';
 import { spacing } from '@/theme/spacing';
 import { radius } from '@/theme/radius';
@@ -16,6 +16,7 @@ import { formatPlate, isValidPlate, normalizePlate } from '@/utils/plate';
 import { haptics } from '@/utils/haptics';
 
 const schema = z.object({
+  avoidHighways: z.boolean(),
   plateNumber: z.string().refine((value) => isValidPlate(value)),
   type: z.enum(['private', 'commercial', 'taxi', 'motorcycle']),
   make: z.string().trim().max(30).optional(),
@@ -57,6 +58,7 @@ export function VehicleForm({
     resolver: zodResolver(schema),
     mode: 'onChange',
     defaultValues: {
+      avoidHighways: defaultValues?.avoidHighways ?? false,
       plateNumber: defaultValues?.plateNumber ?? '',
       type: defaultValues?.type ?? 'private',
       make: defaultValues?.make ?? '',
@@ -69,6 +71,7 @@ export function VehicleForm({
 
   const submit = handleSubmit((values) =>
     onSubmit({
+      avoidHighways: values.avoidHighways,
       plateNumber: values.plateNumber,
       type: values.type,
       make: values.make || undefined,
@@ -216,6 +219,15 @@ export function VehicleForm({
           />
         </View>
       ) : null}
+
+      <Controller
+        control={control}
+        name="avoidHighways"
+        render={({ field }) => (
+          <SwitchRow label={t('vehicle.avoidHighways')} description={t('vehicle.avoidHighwaysBody')}
+            value={field.value} onValueChange={field.onChange} disabled={isSubmitting} />
+        )}
+      />
 
       <AppButton
         label={submitLabel}

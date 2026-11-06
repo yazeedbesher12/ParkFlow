@@ -32,6 +32,7 @@ function toView(vehicle: Vehicle, link: UserVehicle): UserVehicleView {
     role: link.role,
     nickname: link.nickname,
     isDefault: link.isDefault,
+    avoidHighways: link.avoidHighways ?? false,
     displayName: displayNameFor(vehicle, link),
   };
 }
@@ -104,6 +105,7 @@ export const mockVehicleService: VehicleService = {
         role: 'owner',
         nickname: input.nickname?.trim() || undefined,
         isDefault: isFirst,
+        avoidHighways: input.avoidHighways ?? false,
         linkedAt: nowIso(),
       };
       db.userVehicles.push(link);
@@ -133,6 +135,7 @@ export const mockVehicleService: VehicleService = {
       if (input.model !== undefined) vehicle.model = input.model.trim() || undefined;
       if (input.color !== undefined) vehicle.color = input.color.trim() || undefined;
       if (input.colorHex !== undefined) vehicle.colorHex = input.colorHex;
+      if (input.avoidHighways !== undefined) link.avoidHighways = input.avoidHighways;
       if (input.nickname !== undefined) link.nickname = input.nickname.trim() || undefined;
       vehicle.updatedAt = nowIso();
 

@@ -151,7 +151,7 @@ async function fetchRoutes(profile: TravelProfile, points: GeoPoint[], bearing?:
       `?alternatives=${points.length === 2}&overview=full&geometries=geojson&steps=true${bearings}${avoidHighways ? '&exclude=motorway' : ''}`;
     const response = await fetch(url, { signal: controller.signal, headers: HEADERS });
     const json = (await response.json()) as OsrmResponse;
-    if (json.code !== 'Ok' || !json.routes?.length) return [];
+    if (response.ok === false || json.code !== 'Ok' || !json.routes?.length) return [];
 
     const routes = json.routes.map((route) => ({
       distance: route.distance,
@@ -224,6 +224,8 @@ export const routingService = {
     let motorwayExcluded = false;
     const routesPromise = (async () => {
       if (wantsHighwayAvoidance) {
+        // The provider profile defines available exclusion classes. A successful
+        // exclude=motorway response is required before reporting it as applied.
         const excluded = await load(true);
         if (excluded.length) { motorwayExcluded = true; return excluded; }
       }
@@ -293,7 +295,9 @@ export const routingService = {
     const best = scored[0]!;
     const alternatives = scored.slice(1, 1 + (options.maxAlternatives ?? scored.length));
     // Road traffic says nothing about a footpath.
-    const traffic = via.length || profile === 'walking' ? undefined : await enrichTraffic(from, destination);
+    // Google traffic follows a separate unrestricted geometry. Do not overlay
+    // that route on a motorway-excluded OSRM route as if they were the same.
+    const traffic = via.length || profile === 'walking' || motorwayExcluded ? undefined : await enrichTraffic(from, destination);
     return {
       coordinates: best.coordinates,
       distanceMeters: Math.round(best.distance),

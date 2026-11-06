@@ -98,8 +98,12 @@ export function useUpdateVehicle() {
       vehicleId: string;
       input: Partial<CreateVehicleInput>;
     }) => services.vehicles.update(userId!, vehicleId, input),
-    onSuccess: () => {
+    onSuccess: (vehicle) => {
+      queryClient.setQueryData(queryKeys.vehicle(userId!, vehicle.id), vehicle);
+      queryClient.setQueryData<UserVehicleView[]>(queryKeys.vehicles(userId!), (current) =>
+        current?.map(item => item.id === vehicle.id ? vehicle : item));
       void queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+      void queryClient.invalidateQueries({ queryKey: ['route'] });
     },
   });
 }

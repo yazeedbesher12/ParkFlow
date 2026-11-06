@@ -7,6 +7,7 @@ import { services } from '@/services';
 import { useInAppNotificationStore } from '@/store/inAppNotificationStore';
 import { queryKeys } from './queryKeys';
 import { useUserId } from './useSession';
+import { useRoutingVehicle } from './useRoutingVehicle';
 
 /** Road alerts, driver reports, routes and trust points — the features ported from Wusool. */
 
@@ -87,10 +88,11 @@ export function useRoute(
     maxAlternatives?: number;
   },
 ) {
+  const vehicle = useRoutingVehicle();
   return useQuery({
-    queryKey: queryKeys.route(from, to, options?.mode, options?.profile),
-    queryFn: () => services.routing.getRoute(from!, to!, options),
-    enabled: Boolean(from && to),
+    queryKey: [...queryKeys.route(from, to, options?.mode, options?.profile), options, vehicle.key],
+    queryFn: () => services.routing.getRoute(from!, to!, { ...options, vehicleId: vehicle.vehicleId }),
+    enabled: Boolean(from && to) && !vehicle.isPending,
     staleTime: 60_000,
     retry: false,
   });

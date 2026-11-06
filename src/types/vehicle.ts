@@ -33,6 +33,7 @@ export interface UserVehicle {
   role: UserVehicleRole;
   nickname?: string;
   isDefault: boolean;
+  avoidHighways?: boolean;
   linkedAt: ISODateString;
   unlinkedAt?: ISODateString;
 }
@@ -45,5 +46,7 @@ export interface UserVehicleView extends Vehicle {
   isDefault: boolean;
   /** This driver agreed that a SmartGate plate read starts and bills pay-as-you-go parking. */
   autoGateParking?: boolean;
+  /** This driver's saved routing preference for this vehicle. */
+  avoidHighways?: boolean;
   displayName: string;
 }

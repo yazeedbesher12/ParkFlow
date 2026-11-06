@@ -130,6 +130,9 @@ const extraDurationLabel = (seconds: number, locale: 'ar' | 'en') => {
 };
 
 interface CompactRoutePanelProps {
+  routeChoices?: RouteResult;
+  selectedChoice?: string;
+  onSelectChoice?: (id: string) => void;
   destination: RouteDestination;
   route?: RouteResult;
   loading: boolean;
@@ -162,6 +165,9 @@ interface CompactRoutePanelProps {
 }
 
 export function CompactRoutePanel({
+  routeChoices,
+  selectedChoice,
+  onSelectChoice,
   destination,
   route,
   loading,
@@ -275,6 +281,27 @@ export function CompactRoutePanel({
 
       {onTravelModeChange ? <TravelModeToggle value={travelMode} onChange={onTravelModeChange} /> : null}
       <MobilityRouteNotice mobility={route?.mobility} />
+
+      {routeChoices?.alternatives.length && onSelectChoice ? (
+        <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+          <View style={{ gap: spacing.xs }}>
+            {[{ ...routeChoices, id: 'current' }, ...routeChoices.alternatives].map((choice, index) => {
+              const seconds = Math.round(choice.durationSeconds - routeChoices.durationSeconds);
+              const meters = Math.round(choice.distanceMeters - routeChoices.distanceMeters);
+              return <PressableScale key={choice.id} accessibilityRole="button"
+                accessibilityState={{ selected: selectedChoice === choice.id }}
+                style={{ padding: spacing.sm, borderRadius: radius.md,
+                  backgroundColor: selectedChoice === choice.id ? colors.brandSoft : colors.surfaceAlt }}
+                onPress={() => onSelectChoice?.(choice.id)}>
+                <AppText variant="bodySm">{t('route.vehicleChoice', { number: index + 1,
+                  minutes: Math.max(1, Math.round(choice.durationSeconds / 60)),
+                  distance: formatDistance(choice.distanceMeters, locale),
+                  seconds: `${seconds > 0 ? '+' : ''}${seconds}`, meters: `${meters > 0 ? '+' : ''}${meters}` })}</AppText>
+              </PressableScale>;
+            })}
+          </View>
+        </ScrollView>
+      ) : null}
 
       {noWalkingRoute ? (
         <View accessible accessibilityRole="alert" style={{ flexDirection: row, alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.warningSoft }}>

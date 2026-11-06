@@ -35,10 +35,6 @@ const uniqueCoordinates = (coordinates: GeoPoint[]) =>
     Math.abs(point.longitude - coordinates[index - 1]!.longitude) > 0.000001,
   );
 
-async function routeLeg(from: GeoPoint, to: GeoPoint) {
-  return services.routing.getRoute(from, to, ROUTE_OPTIONS);
-}
-
 const needKeyForCategory = (category: TripNeedCategory) => category.needKey ?? category.id;
 
 const placeMatchesCategory = (place: TripNeedPlace, category: TripNeedCategory) =>
@@ -66,7 +62,10 @@ export async function planRouteWithNeeds(
   destination: GeoPoint,
   categories: TripNeedCategory[],
   places: TripNeedPlace[],
+  vehicleId?: string,
 ): Promise<TripNeedsRoutePlan | undefined> {
+  const routeLeg = (from: GeoPoint, to: GeoPoint) =>
+    services.routing.getRoute(from, to, { ...ROUTE_OPTIONS, vehicleId });
   if (!categories.length) return undefined;
   const baseRoute = await routeLeg(origin, destination);
   let current = origin;
@@ -192,6 +191,7 @@ export async function planRouteWithNeeds(
     addedDurationSeconds: Math.max(0, totalDurationSeconds - baseRoute.durationSeconds),
     route: {
       ...finalLeg,
+      source: [...legRoutes, finalLeg].every(leg => leg.source === 'osrm') ? 'osrm' : 'straight-line',
       coordinates: routeCoordinates.length >= 2 ? routeCoordinates : [origin, ...stops.map((stop) => stop.place.location), destination],
       distanceMeters: Math.round(totalDistanceMeters),
       durationSeconds: Math.round(totalDurationSeconds),
@@ -201,6 +201,8 @@ export async function planRouteWithNeeds(
       penaltySeconds: legRoutes.reduce((total, leg) => total + leg.penaltySeconds, 0) + finalLeg.penaltySeconds,
       trafficSegments: undefined,
       trafficSummary: undefined,
+      mobility: { notices: [...new Set([...legRoutes, finalLeg].flatMap(leg => leg.mobility?.notices ?? []))]
+        .filter(code => code !== 'highways_applied' || [...legRoutes, finalLeg].every(leg => leg.mobility?.notices.includes('highways_applied'))) },
     },
   };
 }

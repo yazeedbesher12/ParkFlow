@@ -26,6 +26,7 @@ route(
   'post',
   '/routes/plan',
   z.object({
+    vehicleId: id.optional(),
     origin: geo,
     destination: geo,
     profile: z.enum(['driving', 'walking']).optional(),
@@ -38,7 +39,13 @@ route(
   }).strict(),
   async (r, b) => {
     const profile = await getHealthProfile(user(r));
-    return routingService.getRoute(b.origin, b.destination, { ...b, mobility: profile?.consent ? profile.mobility : undefined });
+    const vehicle = b.vehicleId ? await vehicles.get(user(r), b.vehicleId) : undefined;
+    const mobility = profile?.consent ? profile.mobility : undefined;
+    return routingService.getRoute(b.origin, b.destination, { ...b,
+      mobility: vehicle?.avoidHighways
+        ? { ...(mobility ?? { avoidHighways: false, preferSmootherRoads: false, accessibleParking: false, stepFreeAccess: false }), avoidHighways: true }
+        : mobility,
+    });
   },
 );
 // Optional AI overview of a planned route. The client sends the provider's own instructions; nothing is routed here.

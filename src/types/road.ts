@@ -171,6 +171,8 @@ export interface RouteStep {
 export type TravelMode = 'driving' | 'walking';
 
 export interface RouteRequestOptions {
+  /** Authenticated backend loads this driver's saved vehicle preference. */
+  vehicleId?: string;
   /** Routing profile; driving when omitted. */
   profile?: TravelMode;
   mode?: 'checkpoint-aware' | 'fastest';

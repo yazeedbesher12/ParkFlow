@@ -64,6 +64,7 @@ export interface AuthResult {
 }
 
 export interface CreateVehicleInput {
+  avoidHighways?: boolean;
   plateNumber: string;
   type: VehicleType;
   make?: string;

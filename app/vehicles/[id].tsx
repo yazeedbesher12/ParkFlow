@@ -30,6 +30,7 @@ import { radius } from '@/theme/radius';
 import { useLocale } from '@/hooks/useLocale';
 import {
   useSetAutoGateParking,
+  useUpdateVehicle,
   useSetDefaultVehicle,
   useUnlinkVehicle,
   useVehicle,
@@ -64,6 +65,7 @@ export default function VehicleDetailScreen() {
   const { data: zones = [] } = useZones();
   const setDefault = useSetDefaultVehicle();
   const autoGate = useSetAutoGateParking();
+  const updateVehicle = useUpdateVehicle();
   const unlink = useUnlinkVehicle();
 
   const [removeOpen, setRemoveOpen] = useState(false);
@@ -188,6 +190,13 @@ export default function VehicleDetailScreen() {
           {vehicle.model ? <DetailRow label={t('vehicle.model')} value={vehicle.model} /> : null}
           {vehicle.color ? <DetailRow label={t('vehicle.color')} value={vehicle.color} /> : null}
           <DetailRow label={t('vehicle.addedOn')} value={formatDate(vehicle.createdAt, dateLocale)} />
+        </Card>
+
+        <Card padding="lg" style={{ gap: spacing.sm }}>
+          <SwitchRow label={t('vehicle.avoidHighways')} description={t('vehicle.avoidHighwaysBody')}
+            value={vehicle.avoidHighways ?? false} disabled={updateVehicle.isPending}
+            onValueChange={(avoidHighways) => updateVehicle.mutate({ vehicleId: vehicle.id, input: { avoidHighways } })} />
+          {updateVehicle.isError ? <AppText variant="caption" color="danger">{errorMessage(updateVehicle.error)}</AppText> : null}
         </Card>
 
         {/* ---- SmartGate consent --------------------------------------- */}

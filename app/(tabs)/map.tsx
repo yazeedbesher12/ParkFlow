@@ -1,3 +1,4 @@
+import { useRoutingVehicle } from '@/hooks/useRoutingVehicle';
 import { useCheckpointConnectionStore } from '@/store/checkpointConnectionStore';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Linking, Platform, View } from 'react-native';
@@ -193,11 +194,13 @@ export default function MapScreen() {
   const [tripNeedPlaces, setTripNeedPlaces] = useState<TripNeedPlace[]>([]);
   const [tripNeedsLoading, setTripNeedsLoading] = useState(false);
   const [tripNeedsError, setTripNeedsError] = useState(false);
-  const [routeNeedsPlan, setRouteNeedsPlan] = useState<TripNeedsRoutePlan>();
-  const [plannedRouteNeeds, setActiveRouteNeedsPlan] = useState<TripNeedsRoutePlan>();
+  const routingVehicle = useRoutingVehicle();
+  const [savedRouteNeedsPlan, setRouteNeedsPlan] = useState<TripNeedsRoutePlan & { vehicleKey: string }>();
+  const routeNeedsPlan = savedRouteNeedsPlan?.vehicleKey === routingVehicle.key ? savedRouteNeedsPlan : undefined;
+  const [plannedRouteNeeds, setActiveRouteNeedsPlan] = useState<TripNeedsRoutePlan & { vehicleKey: string }>();
   /** Driving or walking. Trip-need stops are planned for a car, so a walk ignores them. */
   const [travelMode, setTravelMode] = useState<TravelMode>('driving');
-  const activeRouteNeedsPlan = travelMode === 'walking' ? undefined : plannedRouteNeeds;
+  const activeRouteNeedsPlan = travelMode === 'walking' || plannedRouteNeeds?.vehicleKey !== routingVehicle.key ? undefined : plannedRouteNeeds;
   const [routeNeedsDisplayMode, setRouteNeedsDisplayMode] = useState<RouteNeedsDisplayMode>('needs');
   const [routeNeedsLoading, setRouteNeedsLoading] = useState(false);
   const [routeNeedsError, setRouteNeedsError] = useState(false);
@@ -497,20 +500,19 @@ export default function MapScreen() {
     setRouteNeedsPlan(undefined);
     setRouteNeedsError(false);
     setRouteNeedsDisplayMode('needs');
-    if (tripNeedsMode !== 'route') {
-      setActiveRouteNeedsPlan(undefined);
-    }
-    if (!selectedDestination || !routeOrigin || allTripNeedCategories.length === 0 || tripNeedsLoading) {
+    setActiveRouteNeedsPlan(undefined);
+    if (routingVehicle.isPending || !selectedDestination || !routeOrigin || allTripNeedCategories.length === 0 || tripNeedsLoading) {
       setRouteNeedsLoading(false);
       return;
     }
     let cancelled = false;
     setRouteNeedsLoading(true);
-    planRouteWithNeeds(routeOrigin, selectedDestination.location, allTripNeedCategories, tripNeedPlaces)
+    planRouteWithNeeds(routeOrigin, selectedDestination.location, allTripNeedCategories, tripNeedPlaces, routingVehicle.vehicleId)
       .then((plan) => {
         if (!cancelled) {
-          setRouteNeedsPlan(plan);
-          if (tripNeedsMode === 'route') setActiveRouteNeedsPlan(plan);
+          const taggedPlan = plan ? { ...plan, vehicleKey: routingVehicle.key } : undefined;
+          setRouteNeedsPlan(taggedPlan);
+          if (tripNeedsMode === 'route') setActiveRouteNeedsPlan(taggedPlan);
         }
       })
       .catch(() => {
@@ -520,11 +522,11 @@ export default function MapScreen() {
         if (!cancelled) setRouteNeedsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [allTripNeedCategories, routeOrigin, selectedDestination, tripNeedPlaces, tripNeedsLoading, tripNeedsMode]);
+  }, [allTripNeedCategories, routeOrigin, selectedDestination, tripNeedPlaces, tripNeedsLoading, tripNeedsMode, routingVehicle.key, routingVehicle.isPending, routingVehicle.vehicleId]);
   useEffect(() => {
     setSelectedRouteId('current');
     setAlternativeDismissed(false);
-  }, [routeTarget?.type, routeTarget?.id, routeOrigin?.latitude, routeOrigin?.longitude, travelMode]);
+  }, [routeTarget?.type, routeTarget?.id, routeOrigin?.latitude, routeOrigin?.longitude, travelMode, routingVehicle.key]);
   useEffect(() => {
     if (routeError) setLocationMessage(t('ramallahParking.routeUnavailable'));
   }, [routeError, t]);
@@ -1460,6 +1462,9 @@ export default function MapScreen() {
           <CompactRoutePanel
             destination={routeTarget}
             route={displayedRoute}
+            routeChoices={activeRouteNeedsPlan ? undefined : route}
+            selectedChoice={selectedRouteId}
+            onSelectChoice={setSelectedRouteId}
             loading={activeRouteNeedsPlan ? false : routeLoading}
             needsNotice={routeNeedsNotice}
             routeNeedsComparison={routeNeedsComparison}
